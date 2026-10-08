@@ -6,7 +6,7 @@ This directory holds lightweight project-operating notes for agents working on *
 
 - Default branch: `main`
 - The repository now contains the cleaned archive under `.source/`.
-- `.source/uncompiled/clock/` is the editable Arduino source; `.source/uncompiled/install/` contains the installer; `.source/compiled/` is reserved for flat `.bin` files.
+- `.source/uncompiled/` contains raw editable files; `.source/compiled/` mirrors its versioned update and bootloader slots for firmware fetched by the clock.
 - The imported source is not yet compile-ready because the archive did not include `bootloader.h`, weather icons, or compiled binaries.
 
 ## Intended project direction
@@ -27,9 +27,12 @@ Use the version placeholder consistently:
 
 ```text
 .source/
-├── compiled/                 # flat .bin files only; no version subfolders
-└── uncompiled/
-    ├── clock/                # active Arduino source
+├── compiled/                 # mirrored update tree; slots await .bin files
+│   ├── bootloader/fallback/bootloader/bootloaderV<version>/
+│   └── updates/updateV<version>/
+└── uncompiled/               # raw files for download and editing
+    ├── bootloader/fallback/bootloader/bootloaderV<version>/
+    ├── updates/updateV<version>/
     └── install/              # Windows launcher and Python installer
 ```
 
@@ -38,15 +41,15 @@ Guidelines:
 1. Name the primary application sketch `V<version>.ino` when it is the active build, or `updateV<version>.ino` when stored as an SD update artifact. Do not leave an extra `clock.ino` copy unless it is intentionally a separate sketch.
 2. Name support modules for their responsibility, for example `weather.h`, `display.h`, or `bootloader.h`. Include them from the versioned `.ino` entry point.
 3. Keep SD-card assets under `.source/`; do not mix installed SD payloads with source-only development files without documenting the reason.
-4. Keep compiled firmware as plain `.bin` files directly under `.source/compiled/`. Do not create `BootloaderV...` or `UpdateV...` folders there. Any fallback/version policy must be encoded in the filename and update logic. This is application-level update logic, not a replacement for the ESP32 ROM bootloader.
+4. Keep `compiled/` and `uncompiled/` as matching trees. Raw `.ino` files belong in `uncompiled`; compiled firmware belongs in the matching `compiled` slot. Do not add an extra version-folder layer. This is application-level update logic, not a replacement for the ESP32 ROM bootloader.
 
 ## SD-card setup tool
 
 The planned Windows setup tool is a `.bat` launcher backed by Python. Its responsibilities are to:
 
 - Prompt the user to select the target drive using Tkinter.
-- Create the `.source/uncompiled/` and `.source/compiled/` directory tree.
-- Keep compiled firmware as flat `.bin` files and never fabricate a binary when a build has not passed.
+- Create matching `.source/uncompiled/` and `.source/compiled/` directory trees.
+- Leave compiled version slots without firmware until a build passes; never fabricate a binary.
 - Create or copy required placeholder bootloader files only when appropriate.
 - Download or copy weather icon assets into `.source/icons`.
 - Report clear errors for missing Python, inaccessible drive letters, failed downloads, or failed file copies.

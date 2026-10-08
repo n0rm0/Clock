@@ -12,7 +12,7 @@ This checklist reflects the requirements in [`agent.md`](agent.md) and the files
 
 ## Arduino firmware
 
-- [x] Import the active TFT_eSPI clock sketch into `.source/uncompiled/clock/`.
+- [x] Import the active TFT_eSPI clock sketch into `.source/uncompiled/updates/updateV1/`.
 - [x] Remove duplicate preview files and the alternate LovyanGFX implementation from the published layout.
 - [ ] Add one versioned primary Arduino entry sketch; do not keep duplicate clock sketches.
 - [ ] Split supporting code into responsibility-named modules such as `display.h`, `weather.h`, and `bootloader.h`.
@@ -29,11 +29,11 @@ This checklist reflects the requirements in [`agent.md`](agent.md) and the files
 
 ## SD-card and update layout
 
-- [x] Create separate `.source/uncompiled/` and `.source/compiled/` areas.
-- [x] Configure compiled firmware to live as flat `.bin` files directly under `.source/compiled/`.
-- [x] Remove the unwanted `BootloaderV...` and `UpdateV...` folder convention from the published layout.
+- [x] Create matching versioned trees under `.source/uncompiled/` and `.source/compiled/`.
+- [x] Keep the compiled update and fallback slots empty of firmware until builds pass.
+- [x] Configure the clock to check `.source/compiled/updates/` for newer updates.
 - [ ] Add `.source/data/` and `.source/icons/` as installer-generated SD-card folders.
-- [ ] Add the bootloader/update implementation and a version naming policy for flat binaries.
+- [ ] Add the bootloader/update implementation and place resulting binaries in the matching compiled slots.
 - [ ] Implement newest-compatible-update selection.
 - [ ] Preserve a fallback image before an update installation.
 - [ ] Return to the previous working firmware when both update and fallback installation fail.
@@ -67,13 +67,13 @@ This checklist reflects the requirements in [`agent.md`](agent.md) and the files
 
 ### Bugs found
 
-- **Confirmed blocker:** `.source/uncompiled/clock/clock.ino` includes `bootloader.h`, but `bootloader.h` was not present in the uploaded archive and is not in the repository.
-- **Confirmed blocker:** no compiled `.bin` files were included, so `.source/compiled/` contains documentation only and cannot be flashed.
+- **Confirmed blocker:** `.source/uncompiled/updates/updateV1/clock.ino` includes `bootloader.h`, but `bootloader.h` was not present in the uploaded archive and is not in the repository.
+- **Confirmed blocker:** no compiled `.bin` files were included, so the mirrored `.source/compiled/` slots cannot be flashed.
 - **Confirmed limitation:** the source references weather icons, but no icon assets were included in the archive.
 
 ### Open bugs and blockers
 
-- [x] **Resolved layout blocker:** `.source/` now exists with separate `uncompiled/` and `compiled/` areas.
+- [x] **Resolved layout blocker:** `.source/` now has matching versioned `uncompiled/` and `compiled/` trees.
 - [ ] **Missing implementation:** the bootloader module and weather icons are still absent.
 - [ ] **No successful build:** the Arduino project cannot compile until `bootloader.h` and the required libraries are supplied.
 - [ ] **Hardware configuration unverified:** display and peripheral pin mappings, display inversion/color order, and library settings still require authoritative documentation and hardware testing.

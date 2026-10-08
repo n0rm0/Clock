@@ -45,14 +45,14 @@
 
 // ---------- SD paths ----------
 #define ICON_DIR       "/.source/icons"
-#define UPDATES_DIR    "/.source/compiled"          // EVERY downloaded .bin is kept here (own file each)
+#define UPDATES_DIR    "/.source/compiled/updates"          // EVERY downloaded .bin is kept here (own file each)
 #define INSTALLED_FILE "/.source/data/installed.txt"
 
 // ---------- GitHub updates ----------
 // The device fetches the NEWEST .bin (by commit date) from .source/compiled/ in this repo.
 #define GH_OWNER        "n0rm0"
 #define GH_REPO         "Clock"
-#define GH_UPDATES_DIR  ".source/compiled"
+#define GH_UPDATES_DIR  ".source/compiled/updates"
 #define GH_TOKEN        ""                         // only needed if the repo is private
 #define UPDATE_CHECK_MS (60UL * 60UL * 1000UL)     // re-check every hour while running
 

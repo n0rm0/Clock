@@ -1,9 +1,21 @@
 # Clock source payload
 
-The repository keeps editable source and compiled firmware separate:
+The repository intentionally keeps **two copies of the same versioned layout**:
 
-- `uncompiled/clock/` contains the active Arduino sketch and configuration.
-- `uncompiled/install/` contains the Windows launcher and Python installer.
-- `compiled/` contains only flat, successfully built `.bin` files. Do not add `BootloaderV...` or `UpdateV...` subfolders there.
+- `uncompiled/` contains raw editable `.ino` and supporting files for download and modification.
+- `compiled/` is the update tree the clock checks for newer firmware binaries.
 
-The uploaded archive did not contain `bootloader.h`, weather icons, or compiled binaries. The active sketch currently includes `bootloader.h`, so it is not compile-ready until that module is supplied or the include is removed as part of the update implementation.
+```text
+.source/
+├── compiled/
+│   ├── bootloader/fallback/bootloader/bootloaderV0.00/
+│   └── updates/updateV1/
+└── uncompiled/
+    ├── bootloader/fallback/bootloader/bootloaderV0.00/
+    ├── updates/updateV1/
+    │   ├── clock.ino
+    │   └── config.h
+    └── install/
+```
+
+The compiled version slots currently contain no firmware binaries. Their small README files only keep the empty slots visible in Git; replace them with real `.bin` files after a successful build. The uploaded archive did not contain `bootloader.h`, weather icons, or compiled binaries.

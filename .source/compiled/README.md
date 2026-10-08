@@ -1,12 +1,13 @@
-# Compiled firmware
+# Compiled firmware update tree
 
-Compiled firmware belongs directly in this directory as plain binary files. Do not create per-version `BootloaderV...` or `UpdateV...` folders here.
+This mirrors the versioned source tree. The clock checks `.source/compiled/updates/` for newer firmware, while the fallback bootloader slot is kept separately.
 
-Expected examples are:
+The slots are intentionally empty of firmware until a build succeeds:
 
 ```text
-.source/compiled/clockV1.00.bin
-.source/compiled/bootloaderV1.00.bin
+compiled/
+├── bootloader/fallback/bootloader/bootloaderV0.00/
+└── updates/updateV1/
 ```
 
-No compiled binaries were included in the uploaded archive, so none are fabricated or marked as ready. Add a `.bin` only after a successful Arduino build and record the board package, partition scheme, and build command.
+The README files inside the slots are Git placeholders, not firmware. Put only the resulting `.bin` files in the corresponding compiled slot; do not add another version-folder layer.

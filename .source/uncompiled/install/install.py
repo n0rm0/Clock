@@ -19,7 +19,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog, filedialog
 
 OWNER, REPO, BRANCH = "n0rm0", "Clock", "main"
-FILES_PATH = ".source/uncompiled/clock"
+FILES_PATH = ".source/uncompiled/updates/updateV1"
 UA = {"User-Agent": "clock-installer"}
 ICON_BASE = "https://raw.githubusercontent.com/basmilius/weather-icons/dev/production/fill"
 ICONS = ["clear-day", "clear-night", "partly-cloudy-day", "partly-cloudy-night", "cloudy",
@@ -326,7 +326,7 @@ def wipe(root):
 
 
 def structure(drive):
-    for d in ("compiled", "data", "icons"):
+    for d in ("compiled/updates", "compiled/bootloader/fallback/bootloader", "data", "icons"):
         os.makedirs(os.path.join(drive, ".source", d), exist_ok=True)
     if os.name == "nt":
         os.system('attrib +h "%s"' % os.path.join(drive, ".source"))
