@@ -15,7 +15,7 @@ This checklist reflects the requirements in [`agent.md`](agent.md) and the files
 - [x] Import the active TFT_eSPI clock sketch as `.source/uncompiled/updates/updateV1/updateV1.ino`.
 - [x] Remove duplicate preview files and the alternate LovyanGFX implementation from the published layout.
 - [x] Keep each Arduino sketch in a same-name folder so Arduino IDE can open it directly.
-- [x] Add `bootloader.h` and the same-name `bootloaderV0.00.ino` fallback sketch.
+- [x] Add `bootloader.h` and the same-name `bootloaderV1.ino` fallback sketch.
 - [ ] Implement the 480 × 320 landscape home screen.
 - [ ] Add the central seven-segment time display and abbreviated weekday.
 - [ ] Add the date, indoor temperature, and humidity bottom row.
@@ -30,7 +30,7 @@ This checklist reflects the requirements in [`agent.md`](agent.md) and the files
 ## SD-card and update layout
 
 - [x] Create matching versioned trees under `.source/uncompiled/` and `.source/compiled/`.
-- [x] Keep the compiled update and fallback slots empty of firmware until builds pass.
+- [x] Keep the compiled update and V1 fallback slots empty of firmware until builds pass; compiled may contain only `.bin` files.
 - [x] Configure the clock to check `.source/compiled/updates/` for newer updates.
 - [ ] Add `.source/data/` and `.source/icons/` as installer-generated SD-card folders.
 - [x] Add the bootloader/update implementation and matching fallback source slot.

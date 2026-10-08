@@ -326,7 +326,7 @@ def wipe(root):
 
 
 def structure(drive):
-    for d in ("compiled/updates", "compiled/bootloader/fallback", "data", "icons"):
+    for d in ("compiled/updates/updateV1", "compiled/bootloader/fallback/bootloaderV1", "data", "icons"):
         os.makedirs(os.path.join(drive, ".source", d), exist_ok=True)
     if os.name == "nt":
         os.system('attrib +h "%s"' % os.path.join(drive, ".source"))
