@@ -3,10 +3,10 @@ Clock installer (lives in the GitHub repo at .source/install/install.py)
 Launched by setup_sd.bat, which downloads this file fresh, runs it, then deletes it.
 
 Rufus-style window: pick the SD card, then three checkboxes (all ON by default):
-  [x] Download source code  - wipe the SD card (2 warnings), build .source/, icons,
-                              and put every sketch in its own folder on the card
-  [x] Compile source code   - arduino-cli (the engine inside Arduino IDE 2) builds the sketches
-  [x] Flash ESP32           - uploads the compiled clock sketch over USB
+  Auto (recommended)        - download and flash the newest compiled .bin from GitHub
+  Beta (unstable)            - download the newest raw sketches and compile them
+  Manual                     - choose a folder of .ino/.h files and compile those sketches
+  SD install                 - optionally wipe/install source and icons on a selected SD card
 When it finishes the window closes by itself.
 
 Source code is kept in  <Documents>\\ClockSource\\<name>\\<name>.ino  so you can edit it.
@@ -417,59 +417,138 @@ def run_cli(cli, args, lo, hi, label):
 
 
 def serial_ports(cli):
+    """Return serial ports only, with the detected board name when available."""
     try:
-        out = subprocess.run([cli, "board", "list", "--format", "json"], capture_output=True, text=True,
-                             creationflags=NO_WINDOW, timeout=30).stdout
+        out = subprocess.run([cli, "board", "list", "--format", "json"], capture_output=True,
+                             text=True, creationflags=NO_WINDOW, timeout=30).stdout
         data = json.loads(out)
         data = data.get("detected_ports", data) if isinstance(data, dict) else data
-        return [d["port"]["address"] for d in data if d.get("port", {}).get("protocol") == "serial"]
+        result = []
+        seen = set()
+        for item in data:
+            port = item.get("port", {})
+            address = port.get("address", "")
+            if not address or port.get("protocol") != "serial" or address in seen:
+                continue
+            seen.add(address)
+            boards = item.get("matching_boards") or item.get("boards") or []
+            board = ""
+            if boards and isinstance(boards[0], dict):
+                board = boards[0].get("name") or boards[0].get("fqbn") or ""
+            result.append((address, board or "Serial device"))
+        return result
     except Exception:
         return []
 
 
-def build_and_flash(do_compile, do_flash, ask_port):
+def version_key(path):
+    values = re.findall(r"[Vv](\d+(?:\.\d+)*)", path)
+    if not values:
+        return (0,)
+    return tuple(int(x) for x in values[-1].split("."))
+
+
+def latest_binary():
+    """Find the newest compiled .bin in the GitHub update tree."""
+    url = "https://api.github.com/repos/%s/%s/git/trees/%s?recursive=1" % (OWNER, REPO, BRANCH)
+    data = json.loads(http_get(url))
+    prefix = ".source/compiled/updates/"
+    paths = [item.get("path", "") for item in data.get("tree", [])
+             if item.get("type") == "blob" and item.get("path", "").startswith(prefix)
+             and item.get("path", "").lower().endswith(".bin")]
+    if not paths:
+        raise RuntimeError("No compiled .bin firmware is available in GitHub at " + prefix)
+    return max(paths, key=lambda x: (version_key(x), x))
+
+
+def download_latest_binary():
+    path = latest_binary()
+    url = "https://raw.githubusercontent.com/%s/%s/%s/%s" % (OWNER, REPO, BRANCH, path)
+    data = http_get(url, 120)
+    stem = os.path.splitext(os.path.basename(path))[0]
+    folder = os.path.join(workspace(), ".build", "auto")
+    os.makedirs(folder, exist_ok=True)
+    target = os.path.join(folder, stem + ".bin")
+    with open(target, "wb") as f:
+        f.write(data)
+    return path, target
+
+
+def flash_binary(cli, binary, port, label):
+    """Upload a downloaded .bin through arduino-cli without compiling it."""
+    folder = tempfile.mkdtemp(prefix="clock_flash_")
+    try:
+        stem = os.path.splitext(os.path.basename(binary))[0]
+        cli_binary = os.path.join(folder, stem + ".ino.bin")
+        shutil.copy2(binary, cli_binary)
+        run_cli(cli, ["upload", "--fqbn", FQBN, "-p", port, "--input-dir", folder],
+                88, 99, "Flashing %s to %s" % (label, port))
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+
+
+def build_sketches(cli, sketches):
+    build = os.path.join(workspace(), ".build")
+    span = 14.0 / max(1, len(sketches))
+    for i, name in enumerate(sketches):
+        lo = int(76 + i * span)
+        run_cli(cli, ["compile", "--fqbn", FQBN, "--build-property", "compiler.cpp.extra_flags=" + TFT_FLAGS,
+                      "--output-dir", os.path.join(build, name), os.path.join(workspace(), name)],
+                lo, int(lo + span), "Compiling %s" % name)
+    return build
+
+
+def build_and_flash(mode, do_flash, ask_port):
+    cli = find_cli()
+    if mode == "auto":
+        path, binary = download_latest_binary()
+        if do_flash:
+            ports = serial_ports(cli)
+            if not ports:
+                raise RuntimeError("No serial ESP32 port found. The SD-card drive is not a flash port.")
+            port = ask_port(ports)
+            if not port:
+                raise Cancelled()
+            flash_binary(cli, binary, port, os.path.basename(path))
+            return "Flashed newest compiled firmware %s to %s" % (path, port), []
+        return "Downloaded newest compiled firmware: " + path, []
+
     ws = workspace()
-    sketches = sorted(e.name for e in os.scandir(ws) if e.is_dir() and os.path.isfile(os.path.join(e.path, e.name + ".ino")))
+    sketches = sorted(e.name for e in os.scandir(ws)
+                      if e.is_dir() and os.path.isfile(os.path.join(e.path, e.name + ".ino")))
     if not sketches:
         raise RuntimeError("No sketches found in " + ws)
-    cli = find_cli()
     prog(55, "Preparing Arduino tools...")
     run_cli(cli, ["core", "update-index", "--additional-urls", ESP_INDEX], 55, 58, "Updating board index")
     run_cli(cli, ["core", "install", CORE, "--additional-urls", ESP_INDEX], 58, 72, "Installing ESP32 board support")
     run_cli(cli, ["lib", "install"] + LIBS, 72, 76, "Installing libraries")
-    build = os.path.join(ws, ".build")
-    span = 14.0 / len(sketches)
-    for i, name in enumerate(sketches):
-        lo = int(76 + i * span)
-        run_cli(cli, ["compile", "--fqbn", FQBN, "--build-property", "compiler.cpp.extra_flags=" + TFT_FLAGS,
-                      "--output-dir", os.path.join(build, name), os.path.join(ws, name)],
-                lo, int(lo + span), "Compiling %s" % name)
-    if do_flash:
-        ports = serial_ports(cli)
-        if not ports:
-            raise RuntimeError("No ESP32 found. Plug it in with a data USB cable (hold BOOT while plugging in if needed) and run again.")
-        port = ports[0] if len(ports) == 1 else ask_port(ports)
-        if not port:
-            raise Cancelled()
-        sk = FLASH_SKETCH if FLASH_SKETCH in sketches else sketches[0]
-        run_cli(cli, ["upload", "--fqbn", FQBN, "-p", port, "--input-dir", os.path.join(build, sk),
-                      os.path.join(ws, sk)], 91, 99, "Flashing %s to %s" % (sk, port))
-        return "Flashed '%s' on %s" % (sk, port), sketches
-    return "Compiled: " + ", ".join(sketches), sketches
+    build = build_sketches(cli, sketches)
+    if not do_flash:
+        return "Built beta/manual sketches: " + ", ".join(sketches), sketches
+    ports = serial_ports(cli)
+    if not ports:
+        raise RuntimeError("No serial ESP32 port found. The SD-card drive is not a flash port.")
+    port = ask_port(ports)
+    if not port:
+        raise Cancelled()
+    sk = FLASH_SKETCH if mode == "beta" and FLASH_SKETCH in sketches else sketches[0]
+    run_cli(cli, ["upload", "--fqbn", FQBN, "-p", port, "--input-dir", os.path.join(build, sk),
+                  os.path.join(ws, sk)], 91, 99, "Flashing %s to %s" % (sk, port))
+    return "Flashed %s to %s" % (sk, port), sketches
 
 
 # ------------------------------------------------------------------ the whole job
 def work(opts, ask_port):
     try:
-        drive, do_dl, do_cc, do_fl, update_only, manual = opts
+        drive, mode, do_dl, do_fl, update_only, manual = opts
         n = m = 0
         inos = []
-        if do_dl or do_cc or do_fl:
-            prog(3, "Getting your files..." if manual else "Getting latest files from GitHub...")
+        if mode in ("beta", "manual") or do_dl:
+            prog(3, "Getting raw source..." if mode != "manual" else "Reading selected folder...")
             n, m, inos = get_source(manual)
             S.summary += ["Source folder: " + workspace(),
                           "Files from GitHub: %d" % n,
-                          "Moved from %s: %d" % ("your selection" if manual else "Downloads", m)]
+                          "Copied from selection/Downloads: %d" % m]
         if do_dl:
             if not update_only:
                 prog(8, "Erasing SD card...")
@@ -481,8 +560,13 @@ def work(opts, ask_port):
             if not update_only:
                 ok, bad = icons(drive, 20, 52)
                 S.summary.append("Icons: %d/%d%s" % (ok, len(ICONS), "  (failed: " + ", ".join(bad) + ")" if bad else ""))
-        if do_cc or do_fl:
-            msg, _ = build_and_flash(do_cc or do_fl, do_fl, ask_port)
+        if mode == "auto" and not do_dl:
+            prog(20, "Finding newest compiled firmware...")
+        if do_fl or mode == "auto":
+            msg, _ = build_and_flash(mode, do_fl, ask_port)
+            S.summary.append(msg)
+        elif mode in ("beta", "manual"):
+            msg, _ = build_and_flash(mode, False, ask_port)
             S.summary.append(msg)
         prog(100, "Done")
     except Cancelled:
@@ -498,47 +582,55 @@ def main():
     update_only = "update" in [a.lower() for a in sys.argv[1:]]
     root = tk.Tk()
     root.title("Clock Setup")
-    root.geometry("440x330")
+    root.geometry("500x410")
     root.resizable(False, False)
     root.attributes("-topmost", True)
-
     pad = {"padx": 16}
-    ttk.Label(root, text="Device").pack(anchor="w", pady=(14, 2), **pad)
+
+    ttk.Label(root, text="Clock setup", font=("Segoe UI", 13, "bold")).pack(anchor="w", pady=(14, 2), **pad)
+    ttk.Label(root, text="Auto flashes the newest stable .bin. Beta compiles the newest raw source.",
+              foreground="#555").pack(anchor="w", **pad)
+
+    mode = tk.StringVar(value="auto")
+    modes = ttk.Frame(root)
+    modes.pack(anchor="w", pady=(10, 2), **pad)
+    ttk.Radiobutton(modes, text="Auto (recommended)", variable=mode, value="auto").pack(side="left")
+    ttk.Radiobutton(modes, text="Beta (unstable)", variable=mode, value="beta").pack(side="left", padx=(12, 0))
+    ttk.Radiobutton(modes, text="Manual", variable=mode, value="manual").pack(side="left", padx=(12, 0))
+
+    def info():
+        messagebox.showinfo("Clock setup modes",
+            "Auto (recommended): downloads and flashes the newest .bin from GitHub. It does not compile source.\n\n"
+            "Beta (unstable): downloads the newest raw .ino/.h files from GitHub, compiles every newest sketch, and can flash updateV1.\n\n"
+            "Manual: choose a folder containing the .ino and .h files you want to compile. It can compile all selected sketches and flash the selected result. Verify the folder before continuing.",
+            parent=root)
+    ttk.Button(modes, text="Info", command=info).pack(side="left", padx=(12, 0))
+
+    ttk.Label(root, text="SD card (optional)").pack(anchor="w", pady=(12, 2), **pad)
     drives = removable_drives()
     labels = [d[1] for d in drives]
-    combo = ttk.Combobox(root, values=labels, state="readonly", width=58)
+    combo = ttk.Combobox(root, values=labels, state="readonly", width=60)
     if labels:
         combo.current(0)
     combo.pack(anchor="w", **pad)
-    ttk.Label(root, text="Choose your SD card (removable drives only)" if labels
-              else "No SD card found - insert it and press Refresh", foreground="#666").pack(anchor="w", **pad)
+    ttk.Label(root, text="Install source and icons to a removable SD card" if labels else "No SD card selected",
+              foreground="#666").pack(anchor="w", **pad)
 
     def refresh():
         nonlocal drives
         drives = removable_drives()
         combo["values"] = [d[1] for d in drives]
-        if drives:
-            combo.current(0)
-        else:
-            combo.set("")
+        combo.current(0) if drives else combo.set("")
+    ttk.Button(root, text="Refresh drives", command=refresh).pack(anchor="e", padx=16, pady=(2, 4))
 
-    ttk.Button(root, text="Refresh", command=refresh).pack(anchor="e", padx=16, pady=(2, 6))
-
-    v_dl, v_cc, v_fl = tk.BooleanVar(value=True), tk.BooleanVar(value=True), tk.BooleanVar(value=True)
-
-    def sync(changed):
-        if changed == "fl" and v_fl.get():
-            v_cc.set(True)          # flashing needs a build
-        if changed == "cc" and not v_cc.get():
-            v_fl.set(False)
-
-    ttk.Checkbutton(root, text="Download source code  (erases the SD card, then installs)", variable=v_dl).pack(anchor="w", **pad)
-    ttk.Checkbutton(root, text="Compile source code", variable=v_cc, command=lambda: sync("cc")).pack(anchor="w", **pad)
-    ttk.Checkbutton(root, text="Flash ESP32", variable=v_fl, command=lambda: sync("fl")).pack(anchor="w", **pad)
+    v_dl = tk.BooleanVar(value=False)
+    v_fl = tk.BooleanVar(value=True)
+    ttk.Checkbutton(root, text="Install source and weather icons to selected SD card", variable=v_dl).pack(anchor="w", **pad)
+    ttk.Checkbutton(root, text="Flash ESP32 after download/build", variable=v_fl).pack(anchor="w", **pad)
 
     status = ttk.Label(root, text="READY", anchor="center", relief="sunken")
     status.pack(fill="x", padx=16, pady=(14, 4))
-    bar = ttk.Progressbar(root, length=408, maximum=100)
+    bar = ttk.Progressbar(root, length=468, maximum=100)
     bar.pack(**pad)
     start = ttk.Button(root, text="START")
     start.pack(pady=10)
@@ -546,11 +638,22 @@ def main():
     def ask_port(ports):
         box = {}
         ev = threading.Event()
-
         def ask():
-            box["p"] = simpledialog.askstring("ESP32 port", "More than one port found:\n" + "\n".join(ports) +
-                                              "\n\nType the one to use:", initialvalue=ports[0], parent=root)
-            ev.set()
+            dialog = tk.Toplevel(root)
+            dialog.title("Select ESP32 port")
+            dialog.transient(root)
+            dialog.grab_set()
+            ttk.Label(dialog, text="Select the ESP32 serial port (SD drives are excluded):").pack(padx=16, pady=(14, 6))
+            values = ["%s — %s" % (address, board) for address, board in ports]
+            port_box = ttk.Combobox(dialog, values=values, state="readonly", width=48)
+            port_box.current(0)
+            port_box.pack(padx=16, pady=4)
+            def choose():
+                box["p"] = ports[port_box.current()][0] if port_box.current() >= 0 else None
+                dialog.destroy()
+                ev.set()
+            ttk.Button(dialog, text="Use selected port", command=choose).pack(pady=(6, 14))
+            dialog.protocol("WM_DELETE_WINDOW", lambda: (dialog.destroy(), ev.set()))
         root.after(0, ask)
         ev.wait()
         return box.get("p")
@@ -562,18 +665,14 @@ def main():
             if S.error:
                 messagebox.showerror("Clock Setup", S.error, parent=root)
             else:
-                root.update()
-                root.after(1500, root.destroy)
                 status["text"] = "DONE"
-                return
-            root.destroy()
-        else:
-            root.after(150, poll)
+                root.after(1500, root.destroy)
+            return
+        root.after(150, poll)
 
     def go():
-        do_dl, do_cc, do_fl = v_dl.get(), v_cc.get(), v_fl.get()
-        if not (do_dl or do_cc or do_fl):
-            return
+        selected_mode = mode.get()
+        do_dl, do_fl = v_dl.get(), v_fl.get()
         drive = None
         if do_dl:
             i = combo.current()
@@ -581,36 +680,43 @@ def main():
                 messagebox.showwarning("Clock Setup", "Pick the SD card first.", parent=root)
                 return
             drive = drives[i][0]
+            if not update_only and not safe_to_wipe(drive):
+                messagebox.showerror("Clock Setup", "%s is not a removable drive. Nothing was changed." % drive, parent=root)
+                return
             if not update_only:
-                if not safe_to_wipe(drive):
-                    messagebox.showerror("Clock Setup", "%s is not a removable drive (or it is your system drive).\nNothing was changed." % drive, parent=root)
+                if not messagebox.askokcancel("WARNING 1 of 2", "%s will be erased before files are written. Continue?" % drives[i][1], parent=root):
                     return
-                if not messagebox.askokcancel("WARNING 1 of 2", "%s will be COMPLETELY ERASED before the files are written.\n\nEverything on it will be lost." % drives[i][1],
-                                              icon="warning", parent=root):
+                if not messagebox.askyesno("WARNING 2 of 2", "Erase %s and continue? This cannot be undone." % drive, default="no", parent=root):
                     return
-                if not messagebox.askyesno("WARNING 2 of 2 - last chance", "This permanently deletes ALL data on %s and cannot be undone.\n\nErase %s and continue?" % (drive, drive),
-                                           icon="warning", default="no", parent=root):
-                    return
+
         manual = None
-        if not do_dl and (do_cc or do_fl):
-            # Download is off: you pick the source files yourself and we check nothing is missing
-            picked = filedialog.askopenfilenames(parent=root, title="Select your .ino and .h files (Ctrl+click for several)",
-                                                 filetypes=[("Arduino files", "*.ino *.h"), ("All files", "*.*")])
-            if not picked:
+        if selected_mode == "manual":
+            messagebox.showwarning("Manual mode", "Select a folder containing the .ino and .h files you want to compile.\n\nUse Info for details. Manual files are copied, not deleted.", parent=root)
+            folder = filedialog.askdirectory(parent=root, title="Select folder containing Arduino .ino and .h files")
+            if not folder:
                 return
-            problems = check_files(list(picked), do_fl)
+            manual = [os.path.join(root_dir, name)
+                      for root_dir, _, names in os.walk(folder)
+                      for name in names if name.lower().endswith((".ino", ".h"))]
+            if not manual:
+                messagebox.showerror("Manual mode", "The selected folder contains no .ino or .h files.", parent=root)
+                return
+            problems = check_files(manual, do_fl)
             if problems:
-                messagebox.showerror("Missing files", "\n".join(problems) + "\n\nSelect all the files together and try again.", parent=root)
+                messagebox.showerror("Missing files", "\n".join(problems), parent=root)
                 return
-            manual = list(picked)
+
+        if selected_mode == "beta" and not messagebox.askyesno("Beta warning — unstable", "Beta compiles the newest raw source and may fail or damage a test device. Continue?", default="no", parent=root):
+            return
+        if update_only:
+            do_fl = False
         start.state(["disabled"])
         combo.state(["disabled"])
-        threading.Thread(target=work, args=((drive, do_dl, do_cc, do_fl, update_only, manual), ask_port), daemon=True).start()
+        threading.Thread(target=work, args=((drive, selected_mode, do_dl, do_fl, update_only, manual), ask_port), daemon=True).start()
         poll()
 
     start.configure(command=go)
     if update_only:
-        v_cc.set(False)
         v_fl.set(False)
     root.mainloop()
 

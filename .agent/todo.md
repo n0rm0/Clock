@@ -43,8 +43,12 @@ This checklist reflects the requirements in [`agent.md`](agent.md) and the files
 
 - [x] Add `.source/install/setup_sd.bat` and `.source/install/install.py`.
 - [x] Make the batch launcher install user-scoped Python with `winget` when Python is missing.
-- [ ] Add a Tkinter drive selector.
-- [ ] Create the required SD-card data, icon, and compiled-binary directories.
+- [x] Add the Tkinter SD-card drive selector.
+- [x] Create the required SD-card data, icon, and compiled-binary directories.
+- [x] Add Auto (recommended) stable `.bin` flashing without source compilation.
+- [x] Add Beta (unstable) raw-source compilation and warning.
+- [x] Add Manual folder selection for `.ino`/`.h` compilation.
+- [x] Add serial ESP32 port selection with board names while excluding SD-card drives.
 - [x] Implement Meteocons download and SVG-to-PNG conversion into `.source/icons/`.
 - [ ] Report missing Python, inaccessible drives, failed downloads, and failed copies clearly.
 - [ ] Avoid deleting or overwriting existing SD-card files without an explicit documented opt-in.
@@ -79,6 +83,6 @@ This checklist reflects the requirements in [`agent.md`](agent.md) and the files
 - [ ] **No successful build:** Arduino compilation has not yet been run with the ESP32 board package and required libraries.
 - [ ] **Hardware configuration unverified:** display and peripheral pin mappings, display inversion/color order, and library settings still require authoritative documentation and hardware testing.
 - [ ] **Update behavior untested:** OTA partition compatibility, fallback installation, version comparison, and rollback behavior have not been implemented or exercised.
-- [ ] **Installer behavior untested:** drive selection, Python bootstrap, file-preservation behavior, download failures, and icon installation still need Windows testing.
+- [ ] **Installer behavior untested:** Windows mode selection, Python bootstrap, serial-port upload, file-preservation behavior, download failures, and icon installation still need Windows testing.
 
 > **Current status:** Structure, bootloader source, and installer paths are implemented. A real Arduino build, Windows installer test, icon download test, and hardware validation remain open.

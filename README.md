@@ -21,4 +21,6 @@ Raw source and compiled firmware use matching versioned paths. Each Arduino sket
 
 The clock fetches the newest update from `.source/compiled/updates/`. The `.bat` launcher downloads `.source/install/install.py` from GitHub and installs user-scoped Python with `winget` when Python is missing. The Python installer fetches the raw `updateV1` source and downloads/converts Meteocons weather icons.
 
+The installer has three modes. **Auto (recommended)** downloads and flashes the newest compiled `.bin` without compiling source. **Beta (unstable)** downloads the newest raw sketches and compiles them. **Manual** lets you select a folder containing the `.ino` and `.h` files to compile. Flashing opens a port selector showing serial ESP32 ports and detected board names; removable SD drives are not treated as flash ports.
+
 The compiled tree must contain only real `.bin` files. No compiled binaries were included yet, so its empty directories are created when the installer prepares the SD card. See [.agent/todo.md](.agent/todo.md) for validation items.

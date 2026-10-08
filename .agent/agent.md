@@ -54,6 +54,8 @@ The planned Windows setup tool is a `.bat` launcher backed by Python. Its respon
 - Create or copy required placeholder bootloader files only when appropriate.
 - Download or copy weather icon assets into `.source/icons`.
 - Install user-scoped Python with `winget` when possible and report clear errors for missing Python, inaccessible drives, failed downloads, or failed file copies.
+- Auto mode downloads/flashes the newest compiled `.bin`; Beta mode fetches and compiles the newest raw source; Manual mode compiles a user-selected folder.
+- Flash port selection must list serial ESP32 ports with detected board names and exclude removable SD-card drives.
 
 Do not delete or overwrite a user's existing SD-card files without an explicit, documented opt-in.
 
