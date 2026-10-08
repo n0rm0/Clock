@@ -86,3 +86,12 @@ This checklist reflects the requirements in [`agent.md`](agent.md) and the files
 - [ ] **Installer behavior untested:** Windows mode selection, Python bootstrap, serial-port upload, file-preservation behavior, download failures, and icon installation still need Windows testing.
 
 > **Current status:** Structure, bootloader source, and installer paths are implemented. A real Arduino build, Windows installer test, icon download test, and hardware validation remain open.
+
+## Deferred installer follow-up
+
+- [ ] Run the `.bat` on Windows with Python/Tkinter and verify the setup window is the only visible launcher UI.
+- [ ] Test Auto mode with a real `.source/compiled/updates/*.bin` and confirm it flashes the selected ESP32 serial port without compiling.
+- [ ] Test Beta mode with multiple versioned raw update folders and confirm it selects and compiles the newest `.ino`.
+- [ ] Test Manual mode with a selected folder containing an application or bootloader `.ino` and its headers.
+- [ ] Confirm the port picker excludes SD-card volumes and labels the ESP32 as `ESP32 Dev Module` when detected.
+- [ ] Confirm compile-only output is a named `.bin` matching the compiled sketch.
