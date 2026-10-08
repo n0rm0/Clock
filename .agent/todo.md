@@ -12,10 +12,10 @@ This checklist reflects the requirements in [`agent.md`](agent.md) and the files
 
 ## Arduino firmware
 
-- [x] Import the active TFT_eSPI clock sketch into `.source/uncompiled/updates/updateV1/`.
+- [x] Import the active TFT_eSPI clock sketch as `.source/uncompiled/updates/updateV1/updateV1.ino`.
 - [x] Remove duplicate preview files and the alternate LovyanGFX implementation from the published layout.
-- [ ] Add one versioned primary Arduino entry sketch; do not keep duplicate clock sketches.
-- [ ] Split supporting code into responsibility-named modules such as `display.h`, `weather.h`, and `bootloader.h`.
+- [x] Keep each Arduino sketch in a same-name folder so Arduino IDE can open it directly.
+- [x] Add `bootloader.h` and the same-name `bootloaderV0.00.ino` fallback sketch.
 - [ ] Implement the 480 × 320 landscape home screen.
 - [ ] Add the central seven-segment time display and abbreviated weekday.
 - [ ] Add the date, indoor temperature, and humidity bottom row.
@@ -33,18 +33,19 @@ This checklist reflects the requirements in [`agent.md`](agent.md) and the files
 - [x] Keep the compiled update and fallback slots empty of firmware until builds pass.
 - [x] Configure the clock to check `.source/compiled/updates/` for newer updates.
 - [ ] Add `.source/data/` and `.source/icons/` as installer-generated SD-card folders.
-- [ ] Add the bootloader/update implementation and place resulting binaries in the matching compiled slots.
-- [ ] Implement newest-compatible-update selection.
-- [ ] Preserve a fallback image before an update installation.
-- [ ] Return to the previous working firmware when both update and fallback installation fail.
+- [x] Add the bootloader/update implementation and matching fallback source slot.
+- [x] Implement newest-compatible-update selection from `.source/compiled/updates/`.
+- [x] Preserve the current OTA slot by aborting failed writes before reboot.
+- [x] Keep the current firmware running when an update fails; hardware rollback testing remains open.
 - [ ] Verify OTA partition requirements and document that this is application-level update logic, not a replacement for the ESP32 ROM bootloader.
 
 ## Windows SD-card setup tool
 
-- [ ] Add a `.bat` launcher backed by Python.
+- [x] Add `.source/install/setup_sd.bat` and `.source/install/install.py`.
+- [x] Make the batch launcher install user-scoped Python with `winget` when Python is missing.
 - [ ] Add a Tkinter drive selector.
 - [ ] Create the required SD-card data, icon, and compiled-binary directories.
-- [ ] Download or copy the weather icons into `.source/icons/`.
+- [x] Implement Meteocons download and SVG-to-PNG conversion into `.source/icons/`.
 - [ ] Report missing Python, inaccessible drives, failed downloads, and failed copies clearly.
 - [ ] Avoid deleting or overwriting existing SD-card files without an explicit documented opt-in.
 - [ ] Test the tool using a disposable directory or removable test drive.
@@ -67,17 +68,17 @@ This checklist reflects the requirements in [`agent.md`](agent.md) and the files
 
 ### Bugs found
 
-- **Confirmed blocker:** `.source/uncompiled/updates/updateV1/clock.ino` includes `bootloader.h`, but `bootloader.h` was not present in the uploaded archive and is not in the repository.
+- **Resolved blocker:** `updateV1.ino` now has the required `bootloader.h` module.
 - **Confirmed blocker:** no compiled `.bin` files were included, so the mirrored `.source/compiled/` slots cannot be flashed.
 - **Confirmed limitation:** the source references weather icons, but no icon assets were included in the archive.
 
 ### Open bugs and blockers
 
 - [x] **Resolved layout blocker:** `.source/` now has matching versioned `uncompiled/` and `compiled/` trees.
-- [ ] **Missing implementation:** the bootloader module and weather icons are still absent.
-- [ ] **No successful build:** the Arduino project cannot compile until `bootloader.h` and the required libraries are supplied.
+- [x] **Resolved implementation blocker:** the OTA bootloader module and same-name fallback sketch are present.
+- [ ] **No successful build:** Arduino compilation has not yet been run with the ESP32 board package and required libraries.
 - [ ] **Hardware configuration unverified:** display and peripheral pin mappings, display inversion/color order, and library settings still require authoritative documentation and hardware testing.
 - [ ] **Update behavior untested:** OTA partition compatibility, fallback installation, version comparison, and rollback behavior have not been implemented or exercised.
-- [ ] **Installer behavior untested:** drive selection, file-preservation behavior, download failures, and icon installation have not been implemented or tested.
+- [ ] **Installer behavior untested:** drive selection, Python bootstrap, file-preservation behavior, download failures, and icon installation still need Windows testing.
 
-> **Current status:** Archive cleanup and layout work are complete. Firmware and installer work remain open; no implementation should be marked done until the missing module/assets are supplied and a real build passes.
+> **Current status:** Structure, bootloader source, and installer paths are implemented. A real Arduino build, Windows installer test, icon download test, and hardware validation remain open.

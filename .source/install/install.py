@@ -1,5 +1,5 @@
 """
-Clock installer (lives in the GitHub repo at .source/uncompiled/install/install.py)
+Clock installer (lives in the GitHub repo at .source/install/install.py)
 Launched by setup_sd.bat, which downloads this file fresh, runs it, then deletes it.
 
 Rufus-style window: pick the SD card, then three checkboxes (all ON by default):
@@ -45,7 +45,7 @@ TFT_FLAGS = " ".join([
     "-DLOAD_FONT8=1", "-DLOAD_GFXFF=1", "-DSMOOTH_FONT=1",
     "-DSPI_FREQUENCY=40000000", "-DSPI_READ_FREQUENCY=16000000", "-DSPI_TOUCH_FREQUENCY=2500000",
 ])
-FLASH_SKETCH = "clock"          # flashed over USB; it updates itself from GitHub afterwards
+FLASH_SKETCH = "updateV1"     # flashed over USB; it updates itself from GitHub afterwards
 NO_WINDOW = 0x08000000 if os.name == "nt" else 0
 
 
@@ -233,7 +233,7 @@ def get_source(manual=None):
     return n, m, inos
 
 
-def check_files(picked, need_clock):
+def check_files(picked, need_update):
     """Check you picked everything the sketches need. Returns a list of problems (empty = OK)."""
     ws = workspace()
     have = {}                                   # lowercase name -> path
@@ -248,9 +248,9 @@ def check_files(picked, need_clock):
     inos = sorted(n for n in have if n.endswith(".ino"))
     problems = []
     if not inos:
-        return ["No .ino file selected. Pick at least clock.ino."]
-    if need_clock and "clock.ino" not in have:
-        problems.append("clock.ino is missing (needed to flash the ESP32).")
+        return ["No .ino file selected. Pick at least updateV1.ino."]
+    if need_update and "updateV1.ino" not in have:
+        problems.append("updateV1.ino is missing (needed to flash the ESP32).")
     for ino in inos:
         seen, todo = set(), [ino]
         while todo:
@@ -326,7 +326,7 @@ def wipe(root):
 
 
 def structure(drive):
-    for d in ("compiled/updates", "compiled/bootloader/fallback/bootloader", "data", "icons"):
+    for d in ("compiled/updates", "compiled/bootloader/fallback", "data", "icons"):
         os.makedirs(os.path.join(drive, ".source", d), exist_ok=True)
     if os.name == "nt":
         os.system('attrib +h "%s"' % os.path.join(drive, ".source"))

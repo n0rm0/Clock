@@ -1,13 +1,11 @@
 # Compiled firmware update tree
 
-This mirrors the versioned source tree. The clock checks `.source/compiled/updates/` for newer firmware, while the fallback bootloader slot is kept separately.
-
-The slots are intentionally empty of firmware until a build succeeds:
+The clock checks `.source/compiled/updates/` for newer firmware. This tree mirrors the raw source tree without adding another nested version folder:
 
 ```text
 compiled/
-├── bootloader/fallback/bootloader/bootloaderV0.00/
+├── bootloader/fallback/bootloaderV0.00/
 └── updates/updateV1/
 ```
 
-The README files inside the slots are Git placeholders, not firmware. Put only the resulting `.bin` files in the corresponding compiled slot; do not add another version-folder layer.
+The slots are intentionally empty of firmware until a build succeeds. README files inside the slots are Git placeholders, not firmware. Put the resulting `.bin` file in the matching slot after compilation.
