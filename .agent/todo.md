@@ -59,6 +59,7 @@ This checklist reflects the requirements in [`agent.md`](agent.md) and the files
 
 - [x] Searched the repository for `.ino`, `.h`, `.cpp`, `.bat`, and `.py` files.
 - [x] Inspected all current project files: `README.md`, `.agent/agent.md`, and this checklist.
+- [x] Checked for `.source/`; it does not exist in the repository.
 - [x] Confirmed there is no Arduino code available to compile or perform a source-level bug review on.
 - [x] Confirmed the working tree was clean before this checklist update.
 
@@ -68,7 +69,7 @@ No source-code bugs were found because no Arduino or setup-tool source exists in
 
 ### Open bugs and blockers
 
-- [ ] **Missing implementation:** the firmware, support modules, bootloader, update sketches, icons, and setup tool described in the requirements are not committed.
+- [ ] **Missing implementation:** `.source/` itself is absent, along with the firmware, support modules, bootloader, update sketches, icons, and setup tool described in the requirements.
 - [ ] **No build target:** there is no Arduino project or board/library configuration, so compilation cannot currently be run.
 - [ ] **Hardware configuration unverified:** display and peripheral pin mappings, display inversion/color order, and library settings still require authoritative documentation and hardware testing.
 - [ ] **Update behavior untested:** OTA partition compatibility, fallback installation, version comparison, and rollback behavior have not been implemented or exercised.
