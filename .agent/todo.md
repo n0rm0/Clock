@@ -12,6 +12,8 @@ This checklist reflects the requirements in [`agent.md`](agent.md) and the files
 
 ## Arduino firmware
 
+- [x] Import the active TFT_eSPI clock sketch into `.source/uncompiled/clock/`.
+- [x] Remove duplicate preview files and the alternate LovyanGFX implementation from the published layout.
 - [ ] Add one versioned primary Arduino entry sketch; do not keep duplicate clock sketches.
 - [ ] Split supporting code into responsibility-named modules such as `display.h`, `weather.h`, and `bootloader.h`.
 - [ ] Implement the 480 × 320 landscape home screen.
@@ -27,11 +29,11 @@ This checklist reflects the requirements in [`agent.md`](agent.md) and the files
 
 ## SD-card and update layout
 
-- [ ] Create `.source/data/` and `.source/icons/`.
-- [ ] Create versioned update folders at `.source/updates/updateV<version>/`.
-- [ ] Store each update sketch as `updateV<version>.ino`.
-- [ ] Create the fallback bootloader path at `.source/bootloader/fallback/bootloader/bootloaderV<version>/`.
-- [ ] Store the fallback bootloader sketch as `bootloaderV<version>.ino`.
+- [x] Create separate `.source/uncompiled/` and `.source/compiled/` areas.
+- [x] Configure compiled firmware to live as flat `.bin` files directly under `.source/compiled/`.
+- [x] Remove the unwanted `BootloaderV...` and `UpdateV...` folder convention from the published layout.
+- [ ] Add `.source/data/` and `.source/icons/` as installer-generated SD-card folders.
+- [ ] Add the bootloader/update implementation and a version naming policy for flat binaries.
 - [ ] Implement newest-compatible-update selection.
 - [ ] Preserve a fallback image before an update installation.
 - [ ] Return to the previous working firmware when both update and fallback installation fail.
@@ -41,7 +43,7 @@ This checklist reflects the requirements in [`agent.md`](agent.md) and the files
 
 - [ ] Add a `.bat` launcher backed by Python.
 - [ ] Add a Tkinter drive selector.
-- [ ] Create the required `.source` directory tree and versioned folders.
+- [ ] Create the required SD-card data, icon, and compiled-binary directories.
 - [ ] Download or copy the weather icons into `.source/icons/`.
 - [ ] Report missing Python, inaccessible drives, failed downloads, and failed copies clearly.
 - [ ] Avoid deleting or overwriting existing SD-card files without an explicit documented opt-in.
@@ -49,7 +51,7 @@ This checklist reflects the requirements in [`agent.md`](agent.md) and the files
 
 ## Documentation and delivery
 
-- [ ] Update `README.md` with setup, build, board, library, SD-card, and firmware-update instructions.
+- [x] Update `README.md` with the current source/compiled layout and known build limitation.
 - [ ] Keep commits focused and describe the validation performed.
 - [ ] Update this checklist only when work is genuinely complete.
 
@@ -58,21 +60,24 @@ This checklist reflects the requirements in [`agent.md`](agent.md) and the files
 ### Checked
 
 - [x] Searched the repository for `.ino`, `.h`, `.cpp`, `.bat`, and `.py` files.
-- [x] Inspected all current project files: `README.md`, `.agent/agent.md`, and this checklist.
-- [x] Checked for `.source/`; it does not exist in the repository.
-- [x] Confirmed there is no Arduino code available to compile or perform a source-level bug review on.
-- [x] Confirmed the working tree was clean before this checklist update.
+- [x] Inspected the imported Arduino, Python, batch, and documentation files.
+- [x] Checked `.source/` and confirmed it has separate `uncompiled/` and `compiled/` areas.
+- [x] Performed a static source review and Python syntax check.
+- [x] Confirmed no `.bin` files were supplied and no fake binaries were created.
 
 ### Bugs found
 
-No source-code bugs were found because no Arduino or setup-tool source exists in the repository yet.
+- **Confirmed blocker:** `.source/uncompiled/clock/clock.ino` includes `bootloader.h`, but `bootloader.h` was not present in the uploaded archive and is not in the repository.
+- **Confirmed blocker:** no compiled `.bin` files were included, so `.source/compiled/` contains documentation only and cannot be flashed.
+- **Confirmed limitation:** the source references weather icons, but no icon assets were included in the archive.
 
 ### Open bugs and blockers
 
-- [ ] **Missing implementation:** `.source/` itself is absent, along with the firmware, support modules, bootloader, update sketches, icons, and setup tool described in the requirements.
-- [ ] **No build target:** there is no Arduino project or board/library configuration, so compilation cannot currently be run.
+- [x] **Resolved layout blocker:** `.source/` now exists with separate `uncompiled/` and `compiled/` areas.
+- [ ] **Missing implementation:** the bootloader module and weather icons are still absent.
+- [ ] **No successful build:** the Arduino project cannot compile until `bootloader.h` and the required libraries are supplied.
 - [ ] **Hardware configuration unverified:** display and peripheral pin mappings, display inversion/color order, and library settings still require authoritative documentation and hardware testing.
 - [ ] **Update behavior untested:** OTA partition compatibility, fallback installation, version comparison, and rollback behavior have not been implemented or exercised.
 - [ ] **Installer behavior untested:** drive selection, file-preservation behavior, download failures, and icon installation have not been implemented or tested.
 
-> **Current status:** The checklist and bug audit are complete. Firmware and installer work remain open; no implementation should be marked done until source files exist and validation has been performed.
+> **Current status:** Archive cleanup and layout work are complete. Firmware and installer work remain open; no implementation should be marked done until the missing module/assets are supplied and a real build passes.
