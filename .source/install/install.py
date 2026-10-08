@@ -19,7 +19,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog, filedialog
 
 OWNER, REPO, BRANCH = "n0rm0", "Clock", "main"
-FILES_PATH = ".source/uncompiled/updates/updateV1"
+SOURCE_ROOT = ".source/uncompiled/updates"
 UA = {"User-Agent": "clock-installer"}
 ICON_BASE = "https://raw.githubusercontent.com/basmilius/weather-icons/dev/production/fill"
 ICONS = ["clear-day", "clear-night", "partly-cloudy-day", "partly-cloudy-night", "cloudy",
@@ -73,6 +73,7 @@ def http_get(url, timeout=30):
 
 
 def list_repo(path):
+    base = path.rstrip("/") + "/"
     url = "https://api.github.com/repos/%s/%s/contents/%s?ref=%s" % (OWNER, REPO, path, BRANCH)
     try:
         items = json.loads(http_get(url))
@@ -81,14 +82,33 @@ def list_repo(path):
     out = []
     for it in items:
         if it["type"] == "file":
-            out.append((it["path"][len(FILES_PATH) + 1:], it["download_url"]))
+            out.append((it["path"][len(base):], it["download_url"]))
         elif it["type"] == "dir":
             out += list_repo(it["path"])
     return out
 
 
+def latest_source_path():
+    """Find the newest same-name updateV... sketch folder in GitHub."""
+    url = "https://api.github.com/repos/%s/%s/git/trees/%s?recursive=1" % (OWNER, REPO, BRANCH)
+    data = json.loads(http_get(url))
+    prefix = SOURCE_ROOT + "/"
+    folders = {}
+    for item in data.get("tree", []):
+        path = item.get("path", "")
+        if item.get("type") != "blob" or not path.startswith(prefix) or not path.endswith(".ino"):
+            continue
+        folder = path.rsplit("/", 1)[0]
+        name = os.path.basename(folder)
+        if os.path.splitext(os.path.basename(path))[0] == name:
+            folders[name] = folder
+    if not folders:
+        raise RuntimeError("No raw update sketch was found under " + SOURCE_ROOT)
+    return max(folders.values(), key=lambda x: (version_key(x), x))
+
+
 def fetch_repo(stage):
-    files = list_repo(FILES_PATH)
+    files = list_repo(latest_source_path())
     for rel, url in files:
         dst = os.path.join(stage, *rel.split("/"))
         os.makedirs(os.path.dirname(dst), exist_ok=True)
@@ -601,7 +621,7 @@ def main():
     def info():
         messagebox.showinfo("Clock setup modes",
             "Auto (recommended): downloads and flashes the newest .bin from GitHub. It does not compile source.\n\n"
-            "Beta (unstable): downloads the newest raw .ino/.h files from GitHub, compiles every newest sketch, and can flash updateV1.\n\n"
+            "Beta (unstable): downloads the newest raw .ino/.h files from GitHub, compiles every newest sketch, and can flash the resulting application.\n\n"
             "Manual: choose a folder containing the .ino and .h files you want to compile. It can compile all selected sketches and flash the selected result. Verify the folder before continuing.",
             parent=root)
     ttk.Button(modes, text="Info", command=info).pack(side="left", padx=(12, 0))
@@ -701,7 +721,7 @@ def main():
             if not manual:
                 messagebox.showerror("Manual mode", "The selected folder contains no .ino or .h files.", parent=root)
                 return
-            problems = check_files(manual, do_fl)
+            problems = check_files(manual, selected_mode == "beta" and do_fl)
             if problems:
                 messagebox.showerror("Missing files", "\n".join(problems), parent=root)
                 return
