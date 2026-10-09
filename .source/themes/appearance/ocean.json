@@ -1,0 +1,12 @@
+{
+  "id": "ocean",
+  "name": "Ocean",
+  "version": "1.0",
+  "style": "cool-blue",
+  "background": "#EAF7FF",
+  "surface": "#FFFFFF",
+  "primary": "#0066CC",
+  "text": "#08243D",
+  "muted": "#54738C",
+  "accent": "#00A7C7"
+}

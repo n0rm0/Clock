@@ -1,0 +1,12 @@
+{
+  "id": "crystal",
+  "name": "Crystal",
+  "version": "1.0",
+  "style": "translucent-light",
+  "background": "#F2F4F8",
+  "surface": "#FFFFFF",
+  "primary": "#007AFF",
+  "text": "#14151A",
+  "muted": "#6B7280",
+  "accent": "#5AC8FA"
+}

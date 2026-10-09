@@ -60,6 +60,7 @@
 
 // ---------- SD paths ----------
 #define ICON_DIR       "/.source/icons"
+#define THEMES_DIR     "/.source/themes/appearance"
 #define UPDATES_DIR    "/.source/compiled/updates"          // EVERY downloaded .bin is kept here (own file each)
 #define INSTALLED_FILE "/.source/data/installed.txt"
 

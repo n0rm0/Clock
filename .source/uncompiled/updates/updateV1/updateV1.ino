@@ -29,6 +29,8 @@
 struct Key;
 struct AlarmState;
 void alarmButton(int x, int y, int w, const String& label, bool selected = false);
+void drawBackHeader(const String& title);
+void settingsRow(int x, int y, const String& label, const String& value = "", bool accent = false);
 
 TFT_eSPI tft = TFT_eSPI();
 TFT_eSprite spr = TFT_eSprite(&tft);
@@ -36,8 +38,29 @@ TFT_eSprite spr = TFT_eSprite(&tft);
 // ---------------- colors ----------------
 #define C(r,g,b) tft.color565(r,g,b)
 uint16_t UI_BLUE, UI_BACK, UI_TEXT, UI_KEY, UI_LIP, UI_RED, UI_YEL, UI_GREEN;
+String appearanceTheme = "crystal";
 
-enum Screen { S_WELCOME, S_SCAN, S_KEYS, S_HOME, S_ALARM, S_CLOCK, S_SETTINGS, S_WIFI, S_WEATHER, S_CALENDAR, S_UPDATE, S_SDCARD, S_SDFILES, S_PROFILE };
+void applyAppearanceTheme() {
+  if (appearanceTheme == "midnight") {
+    UI_BLUE = C(94, 155, 255); UI_BACK = C(23, 27, 39); UI_TEXT = C(245, 247, 255);
+    UI_KEY = C(48, 54, 70); UI_LIP = C(9, 11, 18);
+  } else if (appearanceTheme == "ocean") {
+    UI_BLUE = C(0, 102, 204); UI_BACK = C(234, 247, 255); UI_TEXT = C(8, 36, 61);
+    UI_KEY = C(255, 255, 255); UI_LIP = C(130, 190, 220);
+  } else if (appearanceTheme == "sunrise") {
+    UI_BLUE = C(255, 107, 53); UI_BACK = C(255, 246, 238); UI_TEXT = C(50, 27, 22);
+    UI_KEY = C(255, 255, 255); UI_LIP = C(220, 160, 130);
+  } else if (appearanceTheme == "graphite") {
+    UI_BLUE = C(215, 220, 229); UI_BACK = C(48, 50, 56); UI_TEXT = C(255, 255, 255);
+    UI_KEY = C(65, 68, 76); UI_LIP = C(32, 34, 37);
+  } else {
+    UI_BLUE = C(98, 171, 255); UI_BACK = C(195, 200, 222); UI_TEXT = C(65, 72, 86);
+    UI_KEY = C(232, 236, 245); UI_LIP = C(141, 150, 179);
+  }
+  UI_RED = C(255, 60, 60); UI_YEL = C(255, 230, 0); UI_GREEN = C(173, 255, 47);
+}
+
+enum Screen { S_WELCOME, S_SCAN, S_KEYS, S_HOME, S_ALARM, S_CLOCK, S_SETTINGS, S_WIFI, S_WEATHER, S_CALENDAR, S_UPDATE, S_SDCARD, S_SDFILES, S_PROFILE, S_APPEARANCE };
 Screen screen = S_WELCOME;
 
 // ClockOS release identity. The sketch folder remains updateV1 for installer
@@ -557,6 +580,7 @@ void saveSettings() {
   doc["calendarEnabled"] = settings.calendarEnabled; doc["manualWeather"] = settings.manualWeather;
   doc["classroomEnabled"] = settings.classroomEnabled; doc["setupComplete"] = settings.setupComplete;
   doc["syncEnabled"] = settings.syncEnabled; doc["syncMain"] = settings.syncMain;
+  doc["appearanceTheme"] = appearanceTheme;
   doc["manualCity"] = manualCity; doc["manualLat"] = manualLat; doc["manualLon"] = manualLon;
   serializeJson(doc, f);
   f.close();
@@ -579,6 +603,8 @@ void loadSettings() {
   settings.setupComplete = doc["setupComplete"] | false;
   settings.syncEnabled = doc["syncEnabled"] | false;
   settings.syncMain = doc["syncMain"] | true;
+  String savedTheme = (const char*)(doc["appearanceTheme"] | "crystal");
+  if (savedTheme.length()) appearanceTheme = savedTheme;
   String savedCity = (const char*)(doc["manualCity"] | "");
   if (savedCity.length()) manualCity = savedCity;
   manualLat = doc["manualLat"] | manualLat;
@@ -1177,6 +1203,18 @@ void showProfilePage() {
   txt(F12, C(85, 88, 98), TC_DATUM, "Use the Windows setup app to authorize Google.", 240, 270);
 }
 
+void showAppearancePage() {
+  screen = S_APPEARANCE; drawBackHeader("Appearance");
+  txt(F12, C(85, 88, 98), TC_DATUM, "Choose a ClockOS theme", 240, 58);
+  const char* names[] = {"Crystal", "Midnight", "Ocean", "Sunrise", "Graphite"};
+  const char* ids[] = {"crystal", "midnight", "ocean", "sunrise", "graphite"};
+  for (int i = 0; i < 5; i++) {
+    bool selected = appearanceTheme == ids[i];
+    settingsRow(14 + (i % 2) * 242, 82 + (i / 2) * 44, names[i], selected ? "Selected" : ">", selected);
+  }
+  txt(F12, C(85, 88, 98), TC_DATUM, "More themes can be added to /themes/appearance.", 240, 266);
+}
+
 void drawBackHeader(const String& title) {
   tft.fillScreen(UI_BACK);
   alarmButton(8, 8, 78, "Back");
@@ -1185,7 +1223,7 @@ void drawBackHeader(const String& title) {
   drawSdCardIcon(438, 24, sdOk, sdPresent && !sdOk);
 }
 
-void settingsRow(int x, int y, const String& label, const String& value = "", bool accent = false) {
+void settingsRow(int x, int y, const String& label, const String& value, bool accent) {
   uint16_t blue = C(0, 122, 255);
   tft.fillRoundRect(x, y, 210, 34, 10, 0xFFFF);
   txt(F12, C(30, 32, 38), ML_DATUM, label, x + 12, y + 17);
@@ -1204,6 +1242,8 @@ void showSettingsPage() {
   settingsRow(256, 184, "Wi-Fi", WiFi.status() == WL_CONNECTED ? "Connected" : "Offline", WiFi.status() == WL_CONNECTED);
   settingsRow(14, 226, "Classroom", settings.classroomEnabled ? "ON" : "OFF", settings.classroomEnabled);
   settingsRow(256, 226, "Weather settings", ">", false);
+  settingsRow(14, 266, "Appearance", appearanceTheme, true);
+  settingsRow(256, 266, "Factory Reset", factoryResetArmed ? "Tap again" : ">", factoryResetArmed);
   alarmButton(120, 266, 240, factoryResetArmed ? "Tap again to reset" : "Factory reset", factoryResetArmed);
   txt(F12, 0x0000, TC_DATUM, "Orientation: permanent 180 degrees", 240, 311);
 }
@@ -1352,9 +1392,7 @@ void setup() {
   analogReadResolution(12); analogSetAttenuation(ADC_11db);
 
   tft.init(); tft.setRotation(TFT_ROTATION);
-  UI_BLUE = C(0x62, 0xAB, 0xFF); UI_BACK = C(0xC3, 0xC8, 0xDE); UI_TEXT = C(0x41, 0x48, 0x56);
-  UI_KEY = C(0xE8, 0xEC, 0xF5);  UI_LIP = C(0x8D, 0x96, 0xB3);
-  UI_RED = C(255, 60, 60); UI_YEL = C(255, 230, 0); UI_GREEN = C(0xAD, 0xFF, 0x2F);
+  applyAppearanceTheme();
 
   spr.setColorDepth(16); spr.createSprite(100, 100);
 
@@ -1366,6 +1404,7 @@ void setup() {
 
   ensureCalibration();
   loadSettings();
+  applyAppearanceTheme();
   loadAlarm();
   loadClassroomCache();
   lastActivity = millis();
@@ -1532,7 +1571,8 @@ void loop() {
     else if (y >= 184 && y < 218 && x >= 240) { saveSettings(); showWifiPage(); return; }
     else if (y >= 226 && y < 260 && x < 240) { settings.classroomEnabled = !settings.classroomEnabled; saveSettings(); showSettingsPage(); return; }
     else if (y >= 226 && y < 260 && x >= 240) { saveSettings(); showWeatherPage(); return; }
-    else if (y >= 266 && y < 301 && x >= 100 && x <= 380) {
+    else if (y >= 266 && y < 301 && x < 240) { showAppearancePage(); return; }
+    else if (y >= 266 && y < 301 && x >= 240) {
       if (factoryResetArmed) factoryResetClock();
       factoryResetArmed = true; showSettingsPage(); return;
     }
@@ -1552,6 +1592,17 @@ void loop() {
     if (readTouch(x, y)) {
       if (swipeBackDetected) { swipeBackDetected = false; showHome(); return; }
       if (x < 100 && y < 45) showHome();
+    }
+  } else if (screen == S_APPEARANCE) {
+    if (!readTouch(x, y)) return;
+    if (swipeBackDetected) { swipeBackDetected = false; showSettingsPage(); return; }
+    if (x < 100 && y < 45) { showSettingsPage(); return; }
+    const char* ids[] = {"crystal", "midnight", "ocean", "sunrise", "graphite"};
+    for (int i = 0; i < 5; i++) {
+      int bx = 14 + (i % 2) * 242, by = 82 + (i / 2) * 44;
+      if (x >= bx && x < bx + 210 && y >= by && y < by + 34) {
+        appearanceTheme = ids[i]; applyAppearanceTheme(); saveSettings(); showAppearancePage(); return;
+      }
     }
   } else if (screen == S_WIFI) {
     if (!readTouch(x, y)) return;

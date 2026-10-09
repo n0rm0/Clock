@@ -1,0 +1,12 @@
+{
+  "id": "sunrise",
+  "name": "Sunrise",
+  "version": "1.0",
+  "style": "warm-light",
+  "background": "#FFF6EE",
+  "surface": "#FFFFFF",
+  "primary": "#FF6B35",
+  "text": "#321B16",
+  "muted": "#8F6A60",
+  "accent": "#FFB000"
+}

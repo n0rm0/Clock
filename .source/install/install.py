@@ -29,6 +29,8 @@ ICONS = ["clear-day", "clear-night", "partly-cloudy-day", "partly-cloudy-night",
          "thunderstorms", "thunderstorms-rain", "thunderstorms-day", "snow", "sleet", "hail",
          "fog", "mist", "haze", "wind", "not-available"]
 ICON_SIZE = 96
+THEME_IDS = ["crystal", "midnight", "ocean", "sunrise", "graphite"]
+THEME_BASE = "https://raw.githubusercontent.com/%s/%s/%s/.source/themes/appearance" % (OWNER, REPO, BRANCH)
 
 # Hosyond 4" ESP32-32E = ESP32 Dev Module, 4 MB flash.
 # PartitionScheme=min_spiffs ("Minimal SPIFFS: 1.9 MB APP with OTA") = the biggest app size that
@@ -460,7 +462,7 @@ def wipe(root):
 
 def structure(drive):
     for d in ("compiled/updates/updateV1", "compiled/bootloader/fallback/bootloaderV1",
-              "uncompiled/updates", "uncompiled/bootloader/fallback", "data", "data/preferences", "data/secrets", "icons"):
+              "uncompiled/updates", "uncompiled/bootloader/fallback", "data", "data/preferences", "data/secrets", "icons", "themes/appearance"):
         os.makedirs(os.path.join(drive, ".source", d), exist_ok=True)
     if os.name == "nt":
         os.system('attrib +h "%s"' % os.path.join(drive, ".source"))
@@ -496,6 +498,22 @@ def icons(drive, lo, hi):
             ok += 1
         except Exception:
             bad.append(name)
+    return ok, bad
+
+
+def themes(drive, lo, hi):
+    target = os.path.join(drive, ".source", "themes", "appearance")
+    os.makedirs(target, exist_ok=True)
+    ok, bad = 0, []
+    for i, theme_id in enumerate(THEME_IDS):
+        prog(lo + int((hi - lo) * i / len(THEME_IDS)), "Downloading themes... %d/%d" % (i + 1, len(THEME_IDS)))
+        try:
+            data = http_get("%s/%s.json" % (THEME_BASE, theme_id), 20)
+            with open(os.path.join(target, theme_id + ".json"), "wb") as f:
+                f.write(data)
+            ok += 1
+        except Exception:
+            bad.append(theme_id)
     return ok, bad
 
 
@@ -843,6 +861,8 @@ def work(opts, ask_port, ask_target):
             if not update_only:
                 ok, bad = icons(drive, 20, 52)
                 S.summary.append("Icons: %d/%d%s" % (ok, len(ICONS), "  (failed: " + ", ".join(bad) + ")" if bad else ""))
+                tok, tbad = themes(drive, 52, 58)
+                S.summary.append("Themes: %d/%d%s" % (tok, len(THEME_IDS), "  (failed: " + ", ".join(tbad) + ")" if tbad else ""))
         if mode == "auto" and not do_dl:
             prog(20, "Finding newest compiled firmware...")
         if do_fl or mode == "auto":

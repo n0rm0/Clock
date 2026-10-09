@@ -1,0 +1,12 @@
+{
+  "id": "graphite",
+  "name": "Graphite",
+  "version": "1.0",
+  "style": "neutral-dark",
+  "background": "#202225",
+  "surface": "#303238",
+  "primary": "#D7DCE5",
+  "text": "#FFFFFF",
+  "muted": "#A2A8B5",
+  "accent": "#8E8E93"
+}

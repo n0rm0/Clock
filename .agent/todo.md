@@ -133,4 +133,5 @@ This checklist reflects the requirements in [`agent.md`](agent.md) and the files
 - [x] Show filled, outline, or X-marked SD-card status and warn on Settings exit when changes cannot be saved.
 - [x] Upgrade the release identity to ClockOS 3.1 with one-time first-run setup, Wi-Fi on/off choice, Classroom toggle, Main/Side sync role, Apple-style Settings rows, profile silhouette, swipe-back navigation, multi-network JSON storage, and sync-version compatibility warnings.
 - [x] Preserve SD-card JSON files during installer wipes and store the OAuth client as `/data/secrets/classroomsecret.json`.
+- [x] Add the Apple-style Appearance tab with Crystal, Midnight, Ocean, Sunrise, and Graphite theme packages under `.source/themes/appearance/`; persist the selected theme and install the catalog to the SD card.
 - [ ] Test the updated `.bat` on Windows: OAuth JSON auto-detection, school-account sign-in, SD-card secret/cache placement, flashing, and headless launcher behavior.

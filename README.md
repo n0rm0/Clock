@@ -61,6 +61,13 @@ settings, show capacity/used space, and open a read-only root file viewer.
 The prepare action does not erase unrelated files; weather icons are installed
 by the Windows setup tool.
 
+ClockOS 3.1 also includes an **Appearance** tab in Settings. Built-in theme
+packages live under `.source/themes/appearance/` and are installed to the same
+location on the SD card. The initial catalog includes **Crystal**, **Midnight**,
+**Ocean**, **Sunrise**, and **Graphite**. Each theme is a small versioned JSON
+package, and the installer downloads the catalog so additional themes can be
+added in future releases without changing the SD-card layout.
+
 ClockOS 3.1 uses a one-time Apple-style setup flow after a fresh install or
 Factory Reset. It asks whether Wi-Fi should be enabled, whether Google
 Classroom should be enabled, and whether the display is a **Main** or **Side**

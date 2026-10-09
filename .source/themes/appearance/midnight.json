@@ -1,0 +1,12 @@
+{
+  "id": "midnight",
+  "name": "Midnight",
+  "version": "1.0",
+  "style": "dark-glass",
+  "background": "#090B12",
+  "surface": "#171B27",
+  "primary": "#5E9BFF",
+  "text": "#F5F7FF",
+  "muted": "#9AA4B8",
+  "accent": "#AF8CFF"
+}
