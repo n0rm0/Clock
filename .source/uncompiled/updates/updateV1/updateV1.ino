@@ -1181,6 +1181,7 @@ void drawBackHeader(const String& title) {
   tft.fillScreen(UI_BACK);
   alarmButton(8, 8, 78, "Back");
   txt(F18B, 0x0000, TC_DATUM, title, 240, 24);
+  drawProfileIcon(405, 24, C(80, 84, 96));
   drawSdCardIcon(438, 24, sdOk, sdPresent && !sdOk);
 }
 
