@@ -77,7 +77,9 @@ For a completely console-free launch, double-click `setup_sd.vbs` instead of
 the `.bat` file. Windows necessarily creates a console host when Explorer
 directly opens a `.bat`, so a tiny black flash cannot be eliminated from the
 `.bat` entry point itself. The VBScript launcher starts the same batch through
-its hidden path and shows only the ClockOS Setup dialog.
+its hidden path and shows only the ClockOS Setup dialog. It works both beside
+`setup_sd.bat` and when downloaded by itself: if the batch is not beside it,
+the VBScript quietly downloads the signed repository copy first.
 
 ClockOS 3.1 uses a one-time Apple-style setup flow after a fresh install or
 Factory Reset. It asks whether Wi-Fi should be enabled, whether Google
