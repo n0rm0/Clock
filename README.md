@@ -79,7 +79,13 @@ directly opens a `.bat`, so a tiny black flash cannot be eliminated from the
 `.bat` entry point itself. The VBScript launcher starts the same batch through
 its hidden path and shows only the ClockOS Setup dialog. It works both beside
 `setup_sd.bat` and when downloaded by itself: if the batch is not beside it,
-the VBScript quietly downloads the signed repository copy first.
+the VBScript launcher quietly downloads the signed repository copy first.
+
+The Windows bootstrap supports **Windows 10 and Windows 11** on x64, x86, and
+ARM64. It uses `winget` when available, but Windows 10 installations without
+the App Installer/`winget` package automatically download the matching official
+Python 3.12 installer from python.org instead. No Windows 11-only API is
+required.
 
 ClockOSV1 uses a one-time Apple-style setup flow after a fresh install or
 Factory Reset. It asks whether Wi-Fi should be enabled, whether Google

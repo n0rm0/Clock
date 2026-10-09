@@ -21,8 +21,25 @@ if defined PY goto python_ready
 
 :install_python
 where winget.exe >nul 2>&1
+if not errorlevel 1 winget install --id Python.Python.3.12 -e --scope user --silent --accept-package-agreements --accept-source-agreements >nul 2>&1
+for /f "delims=" %%P in ('where pyw.exe 2^>nul') do if not defined PY set "PY=%%P"
+if not defined PY for /f "delims=" %%P in ('where pythonw.exe 2^>nul') do if not defined PY set "PY=%%P"
+if not defined PY if exist "%LOCALAPPDATA%\Programs\Python\Python312\pythonw.exe" set "PY=%LOCALAPPDATA%\Programs\Python\Python312\pythonw.exe"
+if not defined PY goto download_python
+if not defined PY goto python_error
+
+:download_python
+set "PYINSTALL=%TEMP%\clock_python_%RANDOM%%RANDOM%.exe"
+set "ARCH=%PROCESSOR_ARCHITEW6432%"
+if not defined ARCH set "ARCH=%PROCESSOR_ARCHITECTURE%"
+if /I "%ARCH%"=="ARM64" set "PYURL=https://www.python.org/ftp/python/3.12.10/python-3.12.10-arm64.exe"
+if /I "%ARCH%"=="AMD64" set "PYURL=https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe"
+if /I "%ARCH%"=="x86" set "PYURL=https://www.python.org/ftp/python/3.12.10/python-3.12.10.exe"
+if not defined PYURL set "PYURL=https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe"
+powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command "try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -UseBasicParsing -Uri '%PYURL%' -OutFile '%PYINSTALL%' } catch { exit 1 }" >nul 2>&1
 if errorlevel 1 goto python_error
-winget install --id Python.Python.3.12 -e --scope user --silent --accept-package-agreements --accept-source-agreements >nul 2>&1
+start "" /wait "%PYINSTALL%" /quiet InstallAllUsers=0 PrependPath=0 Include_pip=1 Include_tcltk=1 >nul 2>&1
+del "%PYINSTALL%" >nul 2>&1
 for /f "delims=" %%P in ('where pyw.exe 2^>nul') do if not defined PY set "PY=%%P"
 if not defined PY for /f "delims=" %%P in ('where pythonw.exe 2^>nul') do if not defined PY set "PY=%%P"
 if not defined PY if exist "%LOCALAPPDATA%\Programs\Python\Python312\pythonw.exe" set "PY=%LOCALAPPDATA%\Programs\Python\Python312\pythonw.exe"

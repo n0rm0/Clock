@@ -9,6 +9,9 @@ Windows:
 The Windows VBS launchers are architecture-independent and use the installed
 Windows Python/runtime automatically. They download the current hidden batch
 launcher when run by themselves and show only the ClockOSV1 setup dialog.
+They support Windows 10 and Windows 11. If winget is unavailable on Windows 10,
+the hidden batch downloads the matching official Python 3.12 installer for
+x64, x86, or ARM64.
 
 Portable:
 - ClockOSV1-portable.zip
