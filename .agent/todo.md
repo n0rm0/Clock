@@ -108,6 +108,10 @@ This checklist reflects the requirements in [`agent.md`](agent.md) and the files
 - [x] Add weather icon fallback drawing when SD PNG assets are unavailable.
 - [x] Align compact Wi-Fi/battery indicators and add the next-alarm row below the time.
 - [x] Add a touch-opened alarm editor supporting time, date, one-time alarms, and repeat-day alarms.
+- [x] Add tappable weather, Wi-Fi, calendar, date/time, and settings areas with Back navigation.
+- [x] Add manual US city entry with Open-Meteo geocoding and persistent weather mode/location.
+- [x] Add persistent offline mode and manual DD/MM/YYYY date/time entry after offline restart.
+- [ ] Connect the calendar page to Google Classroom after OAuth/API authorization is configured.
 - [x] Remove the generated `extras` folder from source arrangement.
 - [x] Place installed raw update sketches under the SD card `.source/uncompiled/updates/` tree.
 - [x] Make the `.bat` launch Python with `pythonw` and a hidden bootstrap process instead of a visible terminal.

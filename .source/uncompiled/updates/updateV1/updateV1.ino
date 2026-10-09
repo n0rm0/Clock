@@ -7,7 +7,8 @@
 //  Icons: wifi loader + battery redrawn from Uiverse.io designs
 //         (Erasmus001 wifi-loader, Yaya12085 battery), keys = patrick_2593,
 //         weather = Meteocons PNGs from /.source/icons
-//  Home weather + calendar are still PLACEHOLDERS (not live yet).
+//  Home includes live weather, calendar navigation, Wi-Fi/offline controls,
+//  settings, manual clock entry, and an on-device alarm editor.
 // ====================================================================
 #include <Arduino.h>
 #include <SPI.h>
@@ -17,6 +18,7 @@
 #include <WiFiClientSecure.h>
 #include <ArduinoJson.h>
 #include <time.h>
+#include <sys/time.h>
 #include <TFT_eSPI.h>
 #include <PNGdec.h>
 #include "config.h"
@@ -34,7 +36,7 @@ TFT_eSprite spr = TFT_eSprite(&tft);
 #define C(r,g,b) tft.color565(r,g,b)
 uint16_t UI_BLUE, UI_BACK, UI_TEXT, UI_KEY, UI_LIP, UI_RED, UI_YEL, UI_GREEN;
 
-enum Screen { S_WELCOME, S_SCAN, S_KEYS, S_HOME, S_ALARM };
+enum Screen { S_WELCOME, S_SCAN, S_KEYS, S_HOME, S_ALARM, S_CLOCK, S_SETTINGS, S_WIFI, S_WEATHER, S_CALENDAR };
 Screen screen = S_WELCOME;
 
 String selSsid, password, errMsg;
@@ -129,7 +131,22 @@ struct AlarmState {
 };
 AlarmState alarm = {false, 7, 0, 2026, 1, 1, 0};
 AlarmState alarmDraft = {false, 7, 0, 2026, 1, 1, 0};
+AlarmState clockDraft = {true, 12, 0, 2026, 1, 1, 0};
 bool alarmRinging = false;
+
+struct AppSettings {
+  bool offline;
+  bool use24Hour;
+  bool showBatteryPercent;
+  bool notifications;
+  bool calendarEnabled;
+  bool manualWeather;
+};
+AppSettings settings = {false, false, true, true, true, false};
+String manualCity = "Philadelphia";
+double manualLat = WEATHER_LAT;
+double manualLon = WEATHER_LON;
+bool editingCity = false;
 
 static void* pngOpen(const char* fn, int32_t* size) { pngFile = SD.open(fn); *size = pngFile ? pngFile.size() : 0; return &pngFile; }
 static void pngClose(void*) { if (pngFile) pngFile.close(); }
@@ -172,8 +189,28 @@ String weatherLabelForCode(int code) {
   return "Cloudy";
 }
 
+String urlEncodeCity(String value) {
+  value.replace(" ", "%20"); value.replace(",", "%2C");
+  return value;
+}
+
+bool geocodeManualCity() {
+  if (manualCity.length() == 0 || WiFi.status() != WL_CONNECTED) return false;
+  WiFiClientSecure client; client.setInsecure(); HTTPClient http;
+  String url = "https://geocoding-api.open-meteo.com/v1/search?name=" + urlEncodeCity(manualCity) + "&count=1&language=en&format=json";
+  if (!http.begin(client, url) || http.GET() != HTTP_CODE_OK) { http.end(); return false; }
+  DynamicJsonDocument doc(4096);
+  DeserializationError error = deserializeJson(doc, http.getString()); http.end();
+  if (error || !doc["results"][0]) return false;
+  manualLat = doc["results"][0]["latitude"] | manualLat;
+  manualLon = doc["results"][0]["longitude"] | manualLon;
+  manualCity = (const char*)(doc["results"][0]["name"] | manualCity.c_str());
+  saveSettings();
+  return true;
+}
+
 bool fetchWeather() {
-  if (WiFi.status() != WL_CONNECTED) return false;
+  if (settings.offline || WiFi.status() != WL_CONNECTED) return false;
   lastWeatherFetch = millis();
   WiFiClientSecure client;
   client.setInsecure(); // ESP32 has no bundled CA store; data is non-sensitive.
@@ -181,7 +218,9 @@ bool fetchWeather() {
   double lat = WEATHER_LAT, lon = WEATHER_LON;
   String city = "Local";
 
-  if (http.begin(client, "https://ipapi.co/json/")) {
+  if (settings.manualWeather) {
+    lat = manualLat; lon = manualLon; city = manualCity;
+  } else if (http.begin(client, "https://ipapi.co/json/")) {
     int status = http.GET();
     if (status == HTTP_CODE_OK) {
       DynamicJsonDocument geo(1536);
@@ -394,6 +433,41 @@ bool loadAlarm() {
   return true;
 }
 
+void saveSettings() {
+  if (!sdOk) return;
+  SD.mkdir("/.source"); SD.mkdir(DATA_DIR); SD.remove(SETTINGS_FILE);
+  File f = SD.open(SETTINGS_FILE, FILE_WRITE);
+  if (!f) return;
+  f.println(settings.offline ? 1 : 0);
+  f.println(settings.use24Hour ? 1 : 0);
+  f.println(settings.showBatteryPercent ? 1 : 0);
+  f.println(settings.notifications ? 1 : 0);
+  f.println(settings.calendarEnabled ? 1 : 0);
+  f.println(settings.manualWeather ? 1 : 0);
+  f.println(manualCity);
+  f.println(manualLat, 6); f.println(manualLon, 6);
+  f.close();
+}
+
+void loadSettings() {
+  if (!sdOk) return;
+  File f = SD.open(SETTINGS_FILE);
+  if (!f) return;
+  settings.offline = f.readStringUntil('\n').toInt() != 0;
+  settings.use24Hour = f.readStringUntil('\n').toInt() != 0;
+  settings.showBatteryPercent = f.readStringUntil('\n').toInt() != 0;
+  settings.notifications = f.readStringUntil('\n').toInt() != 0;
+  settings.calendarEnabled = f.readStringUntil('\n').toInt() != 0;
+  settings.manualWeather = f.readStringUntil('\n').toInt() != 0;
+  String savedCity = f.readStringUntil('\n'); savedCity.trim();
+  if (savedCity.length()) manualCity = savedCity;
+  String savedLat = f.readStringUntil('\n'); savedLat.trim();
+  String savedLon = f.readStringUntil('\n'); savedLon.trim();
+  if (savedLat.length()) manualLat = savedLat.toDouble();
+  if (savedLon.length()) manualLon = savedLon.toDouble();
+  f.close();
+}
+
 String alarmTimeText(const AlarmState& a) {
   char b[12]; int h = a.hour % 12; if (!h) h = 12;
   snprintf(b, sizeof(b), "%d:%02d %s", h, a.minute, a.hour < 12 ? "AM" : "PM");
@@ -468,7 +542,8 @@ void showScan() {
   screen = S_SCAN;
   scanNetworks();
   tft.fillScreen(UI_BLUE);
-  txt(F12B, 0x0000, TC_DATUM, "Choose your WiFi", 240, 8);
+  drawKey(6, 4, 72, 30, "Back", false, UI_BACK);
+  txt(F12B, 0x0000, TC_DATUM, "Choose your WiFi", 270, 8);
   for (int i = 0; i < nNets; i++) {
     String name = ssids[i]; if (name.length() > 26) name = name.substring(0, 26);
     drawKey(10, 42 + i * 46, 460, 38, name.c_str());
@@ -521,7 +596,7 @@ void addRow(int y, int h, int n, const float* wt, const char* ch, const uint8_t*
 void drawPasswordField() {
   tft.fillRoundRect(60, 44, 330, 38, 8, 0xFFFF);
   String shown;
-  if (showPass) shown = password; else for (size_t i = 0; i < password.length(); i++) shown += '*';
+  if (editingCity || showPass) shown = password; else for (size_t i = 0; i < password.length(); i++) shown += '*';
   if (shown.length() > 20) shown = shown.substring(shown.length() - 20);
   txt(F12B, 0x0000, ML_DATUM, shown, 70, 63);
 }
@@ -553,12 +628,20 @@ void showKeyboard() {
   addKey(398, 44, 78, 38, 0, 6);
   addKey(2, 6, 50, 32, 0, 7);
 
-  String t = "Password: " + selSsid; if (t.length() > 30) t = t.substring(0, 30);
+  String t = editingCity ? "Manual US city" : "Password: " + selSsid; if (t.length() > 30) t = t.substring(0, 30);
   txt(F12B, 0x0000, TC_DATUM, t, 255, 12);
   if (errMsg.length()) txt(F12B, UI_RED, TC_DATUM, errMsg, 240, 92);
   drawPasswordField();
   char lb[8];
   for (int i = 0; i < nk; i++) { keyLabel(keys[i], lb); drawAnyKey(keys[i], lb, false); }
+}
+
+void showCityKeyboard() {
+  editingCity = true;
+  password = manualCity;
+  selSsid = "Manual city";
+  errMsg = ""; showPass = true; layer = 0;
+  showKeyboard();
 }
 
 // ---- home (from the sketch) ----
@@ -603,28 +686,43 @@ void drawTimeBlock() {
   tft.fillRect(0, 0, 240, 224, 0x0000);
   struct tm ti; bool ok = getLocalTime(&ti, 0) && ti.tm_year > 120;
   char buf[8];
-  if (ok) { int h = ti.tm_hour % 12; if (!h) h = 12; snprintf(buf, sizeof(buf), "%d:%02d", h, ti.tm_min); }
+  if (ok) {
+    int h = settings.use24Hour ? ti.tm_hour : ti.tm_hour % 12;
+    if (!settings.use24Hour && !h) h = 12;
+    snprintf(buf, sizeof(buf), settings.use24Hour ? "%02d:%02d" : "%d:%02d", h, ti.tm_min);
+  }
   else strcpy(buf, "--:--");
   drawBigTime(buf, 240, 36);
-  if (ok) {                                           // only the current one shows
+  if (ok && !settings.use24Hour) {                    // only the current one shows
     if (ti.tm_hour < 12) txt(F24B, COL_WHITE, MC_DATUM, "AM", 70, 175);
     else                 txt(F24B, COL_WHITE, MC_DATUM, "PM", 170, 175);
+  }
+  if (ok) {
+    char date[16]; snprintf(date, sizeof(date), "%02d/%02d/%04d", ti.tm_mday, ti.tm_mon + 1, ti.tm_year + 1900);
+    txt(F12B, COL_DIM, MC_DATUM, date, 120, 208);
+  }
+}
+
+void drawSettingsGear(int cx, int cy, uint16_t color) {
+  tft.drawCircle(cx, cy, 9, color); tft.drawCircle(cx, cy, 3, color);
+  for (int i = 0; i < 8; i++) {
+    float a = i * 0.785398f;
+    tft.drawLine(cx + cosf(a) * 9, cy + sinf(a) * 9,
+                 cx + cosf(a) * 13, cy + sinf(a) * 13, color);
   }
 }
 
 void drawStatusBlock() {
   tft.fillRect(0, 226, 240, 94, 0x0000);
-  drawAlarmIcon(16, 246, alarm.enabled ? UI_YEL : COL_DIM);
-  txt(F12, COL_DIM, ML_DATUM, "Next alarm", 34, 233);
-  String next = nextAlarmText();
-  if (next.length() > 28) next = next.substring(0, 28);
-  txt(F12B, COL_WHITE, ML_DATUM, next, 34, 250);
   int lvl = (WiFi.status() == WL_CONNECTED) ? rssiLevel(WiFi.RSSI()) : 0;
   drawWifiSignal(28, 307, lvl, 0x0000, COL_WHITE, 0x39E7);
   int pct = readBatteryPct();
   drawBattery(170, 298, pct, 0x0000, COL_WHITE);
-  char b[8]; snprintf(b, sizeof(b), "%d%%", pct);
-  txt(F12, COL_DIM, ML_DATUM, b, 218, 301);
+  if (settings.showBatteryPercent) {
+    char b[8]; snprintf(b, sizeof(b), "%d%%", pct);
+    txt(F12, COL_DIM, ML_DATUM, b, 218, 301);
+  }
+  drawSettingsGear(229, 307, COL_DIM);
 }
 
 void drawRightPanel() {
@@ -665,6 +763,24 @@ void adjustAlarmDate(int field, int amount) {
     int y = constrain((int)alarmDraft.year + amount, 2024, 2099);
     alarmDraft.year = y;
     alarmDraft.day = min((int)alarmDraft.day, daysInMonth(y, alarmDraft.month));
+  }
+}
+
+void adjustClockDate(int field, int amount) {
+  if (field == 0) {
+    int d = clockDraft.day + amount;
+    if (d < 1) d = daysInMonth(clockDraft.year, clockDraft.month);
+    if (d > daysInMonth(clockDraft.year, clockDraft.month)) d = 1;
+    clockDraft.day = d;
+  } else if (field == 1) {
+    int m = clockDraft.month + amount;
+    if (m < 1) m = 12; if (m > 12) m = 1;
+    clockDraft.month = m;
+    clockDraft.day = min((int)clockDraft.day, daysInMonth(clockDraft.year, m));
+  } else {
+    int y = constrain((int)clockDraft.year + amount, 2024, 2099);
+    clockDraft.year = y;
+    clockDraft.day = min((int)clockDraft.day, daysInMonth(y, clockDraft.month));
   }
 }
 
@@ -712,6 +828,38 @@ void showAlarmEditor() {
   drawAlarmEditor();
 }
 
+void drawClockEditor() {
+  tft.fillScreen(UI_BACK);
+  txt(F12B, 0x0000, TC_DATUM, "Set date and time", 240, 18);
+  txt(F24B, 0x0000, TC_DATUM, alarmTimeText(clockDraft), 240, 55);
+  alarmButton(18, 82, 78, "Hour -"); alarmButton(106, 82, 78, "Hour +");
+  alarmButton(296, 82, 78, "Min -"); alarmButton(384, 82, 78, "Min +");
+  char date[20]; snprintf(date, sizeof(date), "%02u/%02u/%04u", clockDraft.day, clockDraft.month, clockDraft.year);
+  txt(F18B, 0x0000, TC_DATUM, date, 240, 128);
+  alarmButton(8, 148, 72, "Day -"); alarmButton(86, 148, 72, "Day +");
+  alarmButton(164, 148, 78, "Month -"); alarmButton(248, 148, 78, "Month +");
+  alarmButton(332, 148, 68, "Year -"); alarmButton(406, 148, 68, "Year +");
+  alarmButton(145, 244, 90, "Save", true); alarmButton(250, 244, 100, "Cancel");
+  txt(F12, 0x0000, TC_DATUM, "Offline mode asks for this after every restart", 240, 292);
+}
+
+void showClockEditor() {
+  struct tm ti;
+  clockDraft = {true, 12, 0, 2026, 1, 1, 0};
+  if (getLocalTime(&ti, 0) && ti.tm_year > 120) {
+    clockDraft.hour = ti.tm_hour; clockDraft.minute = ti.tm_min;
+    clockDraft.year = ti.tm_year + 1900; clockDraft.month = ti.tm_mon + 1; clockDraft.day = ti.tm_mday;
+  }
+  screen = S_CLOCK; drawClockEditor();
+}
+
+void applyClockDraft() {
+  struct tm ti = {};
+  ti.tm_year = clockDraft.year - 1900; ti.tm_mon = clockDraft.month - 1;
+  ti.tm_mday = clockDraft.day; ti.tm_hour = clockDraft.hour; ti.tm_min = clockDraft.minute; ti.tm_sec = 0;
+  time_t epoch = mktime(&ti); struct timeval tv = {epoch, 0}; settimeofday(&tv, nullptr);
+}
+
 void showAlarmRinging() {
   alarmRinging = true;
   digitalWrite(LED_G, LOW);
@@ -727,6 +875,67 @@ void dismissAlarm() {
   digitalWrite(LED_G, HIGH);
   if (!alarm.repeatMask) { alarm.enabled = false; saveAlarm(); }
   showHome();
+}
+
+void drawBackHeader(const String& title) {
+  tft.fillScreen(UI_BACK);
+  alarmButton(8, 8, 78, "Back");
+  txt(F18B, 0x0000, TC_DATUM, title, 240, 24);
+}
+
+void showSettingsPage() {
+  screen = S_SETTINGS; drawBackHeader("Settings");
+  alarmButton(14, 50, 210, String("Offline mode: ") + (settings.offline ? "ON" : "OFF"), settings.offline);
+  alarmButton(256, 50, 210, String("Time: ") + (settings.use24Hour ? "24 hour" : "12 hour"), settings.use24Hour);
+  alarmButton(14, 92, 210, String("Battery percent: ") + (settings.showBatteryPercent ? "ON" : "OFF"), settings.showBatteryPercent);
+  alarmButton(256, 92, 210, String("Notifications: ") + (settings.notifications ? "ON" : "OFF"), settings.notifications);
+  alarmButton(14, 134, 210, String("Calendar: ") + (settings.calendarEnabled ? "ON" : "OFF"), settings.calendarEnabled);
+  alarmButton(256, 134, 210, String("Weather: ") + (settings.manualWeather ? "Manual" : "Automatic"), settings.manualWeather);
+  alarmButton(14, 184, 210, "Wi-Fi settings");
+  alarmButton(256, 184, 210, "Weather settings");
+  alarmButton(14, 226, 210, "Set date / time");
+  alarmButton(256, 226, 210, "Check online update");
+  txt(F12, 0x0000, TC_DATUM, "Orientation: permanent 180 degrees", 240, 282);
+  txt(F12, 0x0000, TC_DATUM, "Google Classroom: connect account to enable", 240, 303);
+}
+
+void showWifiPage() {
+  screen = S_WIFI; drawBackHeader("Wi-Fi");
+  txt(F12B, 0x0000, TC_DATUM, WiFi.status() == WL_CONNECTED ? WiFi.SSID() : "Not connected", 240, 62);
+  txt(F12, 0x0000, TC_DATUM, settings.offline ? "Offline clock mode is active" : "Online mode", 240, 88);
+  alarmButton(25, 120, 190, "Change network");
+  alarmButton(265, 120, 190, settings.offline ? "Go online" : "Go offline", settings.offline);
+  alarmButton(25, 170, 190, "Refresh networks");
+  txt(F12, 0x0000, TC_DATUM, "Offline mode keeps the clock running without Wi-Fi.", 240, 228);
+  txt(F12, 0x0000, TC_DATUM, "A restart in offline mode uses saved local settings.", 240, 250);
+}
+
+void showWeatherPage() {
+  screen = S_WEATHER; drawBackHeader("Weather location");
+  txt(F12B, 0x0000, TC_DATUM, weather.valid ? weather.city : "No weather loaded", 240, 62);
+  alarmButton(25, 100, 190, "Automatic Wi-Fi location", !settings.manualWeather);
+  alarmButton(265, 100, 190, "Manual US city", settings.manualWeather);
+  alarmButton(25, 145, 430, String("City: ") + manualCity);
+  txt(F12, 0x0000, TC_DATUM, "Automatic uses approximate public-IP location.", 240, 166);
+  txt(F12, 0x0000, TC_DATUM, "Manual city geocoding will use Open-Meteo.", 240, 188);
+  alarmButton(150, 240, 180, "Refresh weather", true);
+}
+
+void showCalendarPage() {
+  screen = S_CALENDAR; drawBackHeader("Calendar");
+  struct tm ti; bool ok = getLocalTime(&ti, 0);
+  int year = ok ? ti.tm_year + 1900 : 2026, month = ok ? ti.tm_mon + 1 : 1;
+  char title[32]; snprintf(title, sizeof(title), "%02d/%04d", month, year);
+  txt(F18B, 0x0000, TC_DATUM, title, 240, 62);
+  const char* days = "S   M   T   W   T   F   S";
+  txt(F12B, 0x0000, TC_DATUM, days, 240, 92);
+  int first = 0; // compact monthly grid; live calendar integration is separate from the clock.
+  int maxDay = daysInMonth(year, month);
+  for (int d = 1; d <= maxDay; d++) {
+    int pos = first + d - 1, x = 35 + (pos % 7) * 67, y = 112 + (pos / 7) * 28;
+    txt(F12, d == (ok ? ti.tm_mday : 1) ? UI_BLUE : 0x0000, MC_DATUM, String(d), x, y);
+  }
+  txt(F12, 0x0000, TC_DATUM, settings.calendarEnabled ? "Google Classroom requires account connection" : "Calendar disabled in Settings", 240, 285);
 }
 
 void showHome() {
@@ -777,11 +986,14 @@ void setup() {
   if (!sdOk) Serial.println("SD not found");
 
   ensureCalibration();
+  loadSettings();
+  loadAlarm();
 
-  if (sdOk && loadCreds() && tryConnect(15000)) {
+  if (settings.offline) {
+    showClockEditor();
+  } else if (sdOk && loadCreds() && tryConnect(15000)) {
     configTzTime(TIME_TZ, NTP_SERVER);
     fetchWeather();
-    loadAlarm();
     runUpdate();
     showHome();
   } else {
@@ -799,6 +1011,7 @@ void loop() {
 
   } else if (screen == S_SCAN) {
     if (readTouch(x, y)) {
+      if (x < 85 && y < 40) { showHome(); return; }
       if (y > 270) { showScan(); return; }
       int i = (y - 42) / 46;
       if (i >= 0 && i < nNets && y >= 42) {
@@ -820,9 +1033,19 @@ void loop() {
           case 2: if (password.length()) password.remove(password.length() - 1); drawPasswordField(); break;
           case 3: layer = (layer == 2) ? 0 : 2; showKeyboard(); break;
           case 6: showPass = !showPass; showKeyboard(); break;
-          case 7: showScan(); break;
+          case 7:
+            if (editingCity) { editingCity = false; showWeatherPage(); }
+            else showScan();
+            break;
           case 5:
-            if (tryConnect(15000)) {
+            if (editingCity) {
+              manualCity = password; manualCity.trim();
+              if (geocodeManualCity() || settings.manualWeather) {
+                settings.manualWeather = true; saveSettings(); editingCity = false; fetchWeather(); showWeatherPage();
+              } else {
+                errMsg = "connect Wi-Fi to find that city"; showKeyboard();
+              }
+            } else if (tryConnect(15000)) {
               saveCreds();
               configTzTime(TIME_TZ, NTP_SERVER);
               fetchWeather();
@@ -845,8 +1068,12 @@ void loop() {
       return;
     }
     if (readTouch(x, y)) {
-      // Tapping the clock/time panel opens the alarm editor.
-      if (x < 240 && y < 225) { showAlarmEditor(); return; }
+      if (x >= 240 && y < 168) { showWeatherPage(); return; }
+      if (x >= 240 && y >= 168) { showCalendarPage(); return; }
+      if (x < 240 && y >= 270 && x < 95) { showWifiPage(); return; }
+      if (x < 240 && y >= 270 && x >= 150) { showSettingsPage(); return; }
+      if (x < 240 && y >= 190) { settings.use24Hour = !settings.use24Hour; saveSettings(); drawTimeBlock(); return; }
+      if (x < 240 && y < 190) { showAlarmEditor(); return; }
     }
     if (alarmDueNow()) { showAlarmRinging(); return; }
     if (millis() - lastTick > 1000) {
@@ -861,6 +1088,52 @@ void loop() {
       static uint32_t lastUpdate = millis();
       if (millis() - lastUpdate > UPDATE_CHECK_MS) { lastUpdate = millis(); runUpdate(); showHome(); }
     }
+  } else if (screen == S_CLOCK) {
+    if (!readTouch(x, y)) return;
+    if (y >= 82 && y < 116) {
+      if (x < 100) clockDraft.hour = (clockDraft.hour + 23) % 24;
+      else if (x < 200) clockDraft.hour = (clockDraft.hour + 1) % 24;
+      else if (x >= 285 && x < 380) clockDraft.minute = (clockDraft.minute + 59) % 60;
+      else if (x >= 380) clockDraft.minute = (clockDraft.minute + 1) % 60;
+      drawClockEditor();
+    } else if (y >= 148 && y < 182) {
+      if (x < 82) adjustClockDate(0, -1); else if (x < 160) adjustClockDate(0, 1);
+      else if (x < 245) adjustClockDate(1, -1); else if (x < 330) adjustClockDate(1, 1);
+      else if (x < 405) adjustClockDate(2, -1); else adjustClockDate(2, 1);
+      drawClockEditor();
+    } else if (y >= 244 && y < 280) {
+      if (x >= 140 && x < 240) { applyClockDraft(); showHome(); }
+      else if (x >= 240) showHome();
+    }
+  } else if (screen == S_SETTINGS) {
+    if (!readTouch(x, y)) return;
+    if (x < 100 && y < 45) { showHome(); return; }
+    if (y >= 50 && y < 84 && x < 240) settings.offline = !settings.offline;
+    else if (y >= 50 && y < 84 && x >= 240) settings.use24Hour = !settings.use24Hour;
+    else if (y >= 92 && y < 126 && x < 240) settings.showBatteryPercent = !settings.showBatteryPercent;
+    else if (y >= 92 && y < 126 && x >= 240) settings.notifications = !settings.notifications;
+    else if (y >= 134 && y < 168 && x < 240) settings.calendarEnabled = !settings.calendarEnabled;
+    else if (y >= 134 && y < 168 && x >= 240) settings.manualWeather = !settings.manualWeather;
+    else if (y >= 184 && y < 218 && x < 240) { saveSettings(); showWifiPage(); return; }
+    else if (y >= 184 && y < 218 && x >= 240) { saveSettings(); showWeatherPage(); return; }
+    else if (y >= 226 && y < 260 && x < 240) { showClockEditor(); return; }
+    else if (y >= 226 && y < 260 && x >= 240) { saveSettings(); runUpdate(); showSettingsPage(); return; }
+    saveSettings(); showSettingsPage();
+  } else if (screen == S_WIFI) {
+    if (!readTouch(x, y)) return;
+    if (x < 100 && y < 45) { showHome(); return; }
+    if (y >= 120 && y < 155 && x < 230) { showScan(); return; }
+    if (y >= 120 && y < 155 && x >= 230) { settings.offline = !settings.offline; saveSettings(); showWifiPage(); return; }
+    if (y >= 170 && y < 205) { showScan(); return; }
+  } else if (screen == S_WEATHER) {
+    if (!readTouch(x, y)) return;
+    if (x < 100 && y < 45) { showHome(); return; }
+    if (y >= 100 && y < 140 && x < 240) { settings.manualWeather = false; saveSettings(); fetchWeather(); showWeatherPage(); return; }
+    if (y >= 100 && y < 140 && x >= 240) { settings.manualWeather = true; saveSettings(); fetchWeather(); showWeatherPage(); return; }
+    if (y >= 145 && y < 180) { showCityKeyboard(); return; }
+    if (y >= 230 && y < 280) { fetchWeather(); showWeatherPage(); return; }
+  } else if (screen == S_CALENDAR) {
+    if (readTouch(x, y) && x < 100 && y < 45) showHome();
   } else if (screen == S_ALARM) {
     if (!readTouch(x, y)) return;
     if (y >= 78 && y < 112) {
