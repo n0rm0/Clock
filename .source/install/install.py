@@ -888,6 +888,28 @@ def work(opts, ask_port, ask_target):
 def main():
     update_only = "update" in [a.lower() for a in sys.argv[1:]]
     root = tk.Tk()
+    root.withdraw()
+    splash = tk.Toplevel(root)
+    splash.title("ClockOS Setup")
+    splash.geometry("360x170")
+    splash.resizable(False, False)
+    splash.attributes("-topmost", True)
+    splash.protocol("WM_DELETE_WINDOW", lambda: None)
+    splash.configure(bg="#F4F6FA")
+    splash.update_idletasks()
+    sx = (splash.winfo_screenwidth() - splash.winfo_width()) // 2
+    sy = (splash.winfo_screenheight() - splash.winfo_height()) // 2
+    splash.geometry("+%d+%d" % (sx, sy))
+    tk.Label(splash, text="ClockOS Setup", bg="#F4F6FA", fg="#172033",
+             font=("Segoe UI", 15, "bold")).pack(pady=(24, 4))
+    tk.Label(splash, text="Loading, please wait...", bg="#F4F6FA", fg="#657084",
+             font=("Segoe UI", 10)).pack()
+    splash_bar = ttk.Progressbar(splash, mode="indeterminate", length=270)
+    splash_bar.pack(pady=(18, 6))
+    tk.Label(splash, text="Preparing the secure setup window", bg="#F4F6FA", fg="#8A93A3",
+             font=("Segoe UI", 8)).pack()
+    splash_bar.start(12)
+    splash.update()
     root.title("Clock Setup")
     root.geometry("560x560")
     root.resizable(False, False)
@@ -1107,6 +1129,9 @@ def main():
     start.configure(command=go)
     if update_only:
         v_fl.set(False)
+    splash_bar.stop()
+    splash.destroy()
+    root.deiconify()
     root.mainloop()
 
 

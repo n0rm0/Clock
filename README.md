@@ -68,6 +68,11 @@ location on the SD card. The initial catalog includes **Crystal**, **Midnight**,
 package, and the installer downloads the catalog so additional themes can be
 added in future releases without changing the SD-card layout.
 
+The Windows installer opens with a small branded **ClockOS Setup — Loading,
+please wait…** dialog and an animated progress bar while the main setup window
+is initialized. This makes the hidden batch launcher feel intentional rather
+than appearing to run an unknown background process.
+
 ClockOS 3.1 uses a one-time Apple-style setup flow after a fresh install or
 Factory Reset. It asks whether Wi-Fi should be enabled, whether Google
 Classroom should be enabled, and whether the display is a **Main** or **Side**
