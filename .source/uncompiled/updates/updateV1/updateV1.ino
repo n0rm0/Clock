@@ -43,6 +43,9 @@ String selSsid, password, errMsg;
 String ssids[5]; int rssis[5]; int nNets = 0;
 bool showPass = false; uint8_t layer = 0;
 bool sdOk = false;
+bool screenSleeping = false;
+bool factoryResetArmed = false;
+uint32_t lastActivity = 0;
 
 // ====================================================================
 //  text helper (GFX free fonts)
@@ -96,7 +99,7 @@ bool readTouch(int &x, int &y) {
   // explicitly prevents the disconnected/idle XPT2046 readings from acting
   // like touches (the test sketch previously exposed this as RAW_X=0).
   if (tft.getTouch(&tx, &ty, 350) && millis() - last > 220) {
-    last = millis(); x = tx; y = ty; return true;
+    last = millis(); lastActivity = millis(); x = tx; y = ty; return true;
   }
   return false;
 }
@@ -147,6 +150,12 @@ String manualCity = "Philadelphia";
 double manualLat = WEATHER_LAT;
 double manualLon = WEATHER_LON;
 bool editingCity = false;
+String nextAssignment = "No Classroom assignments";
+String nextAssignmentCourse = "";
+String nextAssignmentDue = "";
+int classroomAssignmentCount = 0;
+String assignmentTitles[8], assignmentCourses[8], assignmentDues[8];
+time_t assignmentEpochs[8] = {};
 
 static void* pngOpen(const char* fn, int32_t* size) { pngFile = SD.open(fn); *size = pngFile ? pngFile.size() : 0; return &pngFile; }
 static void pngClose(void*) { if (pngFile) pngFile.close(); }
@@ -468,6 +477,30 @@ void loadSettings() {
   f.close();
 }
 
+void loadClassroomCache() {
+  if (!sdOk || !SD.exists(CLASSROOM_CACHE_FILE)) return;
+  File f = SD.open(CLASSROOM_CACHE_FILE);
+  if (!f) return;
+  DynamicJsonDocument doc(16384);
+  if (deserializeJson(doc, f) != DeserializationError::Ok) { f.close(); return; }
+  f.close();
+  JsonArray items = doc["assignments"].as<JsonArray>();
+  classroomAssignmentCount = items.size();
+  if (items.isNull() || !items.size()) return;
+  for (int i = 0; i < min(classroomAssignmentCount, 8); i++) {
+    JsonObject item = items[i];
+    assignmentTitles[i] = (const char*)(item["title"] | "Assignment");
+    assignmentCourses[i] = (const char*)(item["course"] | "");
+    JsonObject due = item["dueDate"].as<JsonObject>();
+    if (!due.isNull()) {
+      char d[24]; snprintf(d, sizeof(d), "%04d-%02d-%02d", (int)(due["year"] | 0),
+                           (int)(due["month"] | 0), (int)(due["day"] | 0));
+      assignmentDues[i] = d;
+    }
+  }
+  nextAssignment = assignmentTitles[0]; nextAssignmentCourse = assignmentCourses[0]; nextAssignmentDue = assignmentDues[0];
+}
+
 String alarmTimeText(const AlarmState& a) {
   char b[12]; int h = a.hour % 12; if (!h) h = 12;
   snprintf(b, sizeof(b), "%d:%02d %s", h, a.minute, a.hour < 12 ? "AM" : "PM");
@@ -739,7 +772,14 @@ void drawRightPanel() {
   txt(F12, COL_DIM, TC_DATUM, place, 360, 148);
   tft.drawFastHLine(241, 167, 239, 0x7BEF);
   txt(F18B, COL_WHITE, TL_DATUM, "Calendar", 256, 182);
-  txt(F12, COL_DIM, TL_DATUM, DEMO_EVENT, 256, 228);
+  if (settings.calendarEnabled && settings.notifications && classroomAssignmentCount > 0) {
+    String title = nextAssignment; if (title.length() > 25) title = title.substring(0, 25);
+    txt(F12, COL_WHITE, TL_DATUM, title, 256, 228);
+    String due = nextAssignmentDue; if (due.length() > 22) due = due.substring(0, 22);
+    txt(F12, COL_DIM, TL_DATUM, due, 256, 258);
+  } else {
+    txt(F12, COL_DIM, TL_DATUM, DEMO_EVENT, 256, 228);
+  }
 }
 
 int daysInMonth(uint16_t year, uint8_t month) {
@@ -895,8 +935,30 @@ void showSettingsPage() {
   alarmButton(256, 184, 210, "Weather settings");
   alarmButton(14, 226, 210, "Set date / time");
   alarmButton(256, 226, 210, "Check online update");
-  txt(F12, 0x0000, TC_DATUM, "Orientation: permanent 180 degrees", 240, 282);
-  txt(F12, 0x0000, TC_DATUM, "Google Classroom: connect account to enable", 240, 303);
+  alarmButton(120, 266, 240, factoryResetArmed ? "Tap again to reset" : "Factory reset", factoryResetArmed);
+  txt(F12, 0x0000, TC_DATUM, "Orientation: permanent 180 degrees", 240, 311);
+}
+
+void factoryResetClock() {
+  if (sdOk) {
+    SD.remove(SETTINGS_FILE); SD.remove(ALARM_FILE); SD.remove(WIFI_FILE);
+    SD.remove(CLASSROOM_CACHE_FILE); SD.remove("/.source/data/secrets/classroom_token.json");
+    SD.remove("/.source/data/secrets/classroom_client.json");
+  }
+  factoryResetArmed = false;
+  delay(250);
+  ESP.restart();
+}
+
+void sleepDisplay() {
+  if (screenSleeping) return;
+  tft.writecommand(0x28); delay(20); tft.writecommand(0x10);
+  screenSleeping = true;
+}
+
+void wakeDisplay() {
+  tft.writecommand(0x11); delay(120); tft.writecommand(0x29);
+  screenSleeping = false; lastActivity = millis(); showHome();
 }
 
 void showWifiPage() {
@@ -932,10 +994,18 @@ void showCalendarPage() {
   int first = 0; // compact monthly grid; live calendar integration is separate from the clock.
   int maxDay = daysInMonth(year, month);
   for (int d = 1; d <= maxDay; d++) {
-    int pos = first + d - 1, x = 35 + (pos % 7) * 67, y = 112 + (pos / 7) * 28;
+    int pos = first + d - 1, x = 35 + (pos % 7) * 67, y = 112 + (pos / 7) * 20;
     txt(F12, d == (ok ? ti.tm_mday : 1) ? UI_BLUE : 0x0000, MC_DATUM, String(d), x, y);
   }
-  txt(F12, 0x0000, TC_DATUM, settings.calendarEnabled ? "Google Classroom requires account connection" : "Calendar disabled in Settings", 240, 285);
+  if (settings.calendarEnabled && classroomAssignmentCount > 0) {
+    for (int i = 0; i < min(classroomAssignmentCount, 3); i++) {
+      String line = assignmentTitles[i] + "  " + assignmentDues[i];
+      if (line.length() > 46) line = line.substring(0, 46);
+      txt(F12, 0x0000, TL_DATUM, line, 250, 228 + i * 24);
+    }
+  } else {
+    txt(F12, 0x0000, TC_DATUM, settings.calendarEnabled ? "Google Classroom not authorized" : "Calendar disabled in Settings", 240, 285);
+  }
 }
 
 void showHome() {
@@ -988,6 +1058,8 @@ void setup() {
   ensureCalibration();
   loadSettings();
   loadAlarm();
+  loadClassroomCache();
+  lastActivity = millis();
 
   if (settings.offline) {
     showClockEditor();
@@ -1005,6 +1077,16 @@ void loop() {
   int x, y;
   static uint32_t lastTick = 0;
   static int lastMin = -1;
+
+  if (screenSleeping) {
+    if (readTouch(x, y)) wakeDisplay();
+    delay(20);
+    return;
+  }
+  if (screen == S_HOME && millis() - lastActivity >= 60000UL) {
+    sleepDisplay();
+    return;
+  }
 
   if (screen == S_WELCOME) {
     if (readTouch(x, y)) showScan();
@@ -1085,6 +1167,7 @@ void loop() {
       if (millis() - lastWeatherFetch > WEATHER_REFRESH_MS) {
         fetchWeather(); drawRightPanel();
       }
+      loadClassroomCache(); drawRightPanel();
       static uint32_t lastUpdate = millis();
       if (millis() - lastUpdate > UPDATE_CHECK_MS) { lastUpdate = millis(); runUpdate(); showHome(); }
     }
@@ -1118,6 +1201,10 @@ void loop() {
     else if (y >= 184 && y < 218 && x >= 240) { saveSettings(); showWeatherPage(); return; }
     else if (y >= 226 && y < 260 && x < 240) { showClockEditor(); return; }
     else if (y >= 226 && y < 260 && x >= 240) { saveSettings(); runUpdate(); showSettingsPage(); return; }
+    else if (y >= 266 && y < 301 && x >= 100 && x <= 380) {
+      if (factoryResetArmed) factoryResetClock();
+      factoryResetArmed = true; showSettingsPage(); return;
+    }
     saveSettings(); showSettingsPage();
   } else if (screen == S_WIFI) {
     if (!readTouch(x, y)) return;

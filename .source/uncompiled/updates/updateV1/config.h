@@ -45,6 +45,7 @@
 #define HISTORY_FILE  "/.source/data/history.txt"    // every update installed
 #define ALARM_FILE    "/.source/data/alarm.txt"      // enabled,time,date,repeat mask
 #define SETTINGS_FILE "/.source/data/settings.txt"   // app preferences
+#define CLASSROOM_CACHE_FILE "/.source/data/secrets/classroom_cache.json"
 
 // ---------- Weather (placeholder values on screen for now) ----------
 #define WEATHER_LAT  39.95      // Philadelphia

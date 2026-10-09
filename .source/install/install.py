@@ -7,6 +7,7 @@ Rufus-style window: pick the SD card, then three checkboxes (all ON by default):
   Beta (unstable)            - download the newest raw sketches and compile them
   Manual                     - choose a folder of .ino/.h files and compile those sketches
   SD install                 - optionally wipe/install source and icons on a selected SD card
+  Classroom notifications    - authorize before the wipe, then save read-only cache/tokens under /.source/data/secrets
 When it finishes the window closes by itself.
 
 Source code is kept in  <Documents>\\ClockSource\\<name>\\<name>.ino  so you can edit it.
@@ -36,6 +37,15 @@ FQBN = "esp32:esp32:esp32:PartitionScheme=min_spiffs"
 CORE = "esp32:esp32@2.0.17"        # version used by the Hosyond/LCDWIKI demos
 ESP_INDEX = "https://espressif.github.io/arduino-esp32/package_esp32_index.json"
 LIBS = ["TFT_eSPI", "PNGdec", "ArduinoJson"]
+CLASSROOM_SCOPES = [
+    "https://www.googleapis.com/auth/classroom.courses.readonly",
+    "https://www.googleapis.com/auth/classroom.coursework.me.readonly",
+    "https://www.googleapis.com/auth/classroom.courseworkmaterials.readonly",
+    "https://www.googleapis.com/auth/classroom.student-submissions.me.readonly",
+    "https://www.googleapis.com/auth/classroom.announcements.readonly",
+    "https://www.googleapis.com/auth/calendar.readonly",
+]
+SECRETS_DIR = os.path.join(".source", "data", "secrets")
 # TFT_eSPI settings passed at compile time (pins from the LCD wiki), so no library file is edited.
 TFT_FLAGS = " ".join([
     "-DUSER_SETUP_LOADED=1", "-DST7796_DRIVER=1", "-DTFT_WIDTH=320", "-DTFT_HEIGHT=480",
@@ -400,6 +410,71 @@ def icons(drive, lo, hi):
     return ok, bad
 
 
+def classroom_setup(credentials_path, secrets):
+    """Authorize the school account and store private tokens/cache only on the SD card."""
+    if not credentials_path or not os.path.isfile(credentials_path):
+        raise RuntimeError("Classroom notifications require the downloaded OAuth JSON file.")
+    os.makedirs(secrets, exist_ok=True)
+    prog(53, "Preparing Google Classroom authorization...")
+    try:
+        from google_auth_oauthlib.flow import InstalledAppFlow
+        from googleapiclient.discovery import build
+    except ImportError:
+        run_cli(sys.executable, ["-m", "pip", "install", "--user", "google-auth-oauthlib", "google-api-python-client"],
+                53, 58, "Installing Google Classroom support")
+        from google_auth_oauthlib.flow import InstalledAppFlow
+        from googleapiclient.discovery import build
+
+    client_copy = os.path.join(secrets, "classroom_client.json")
+    token_file = os.path.join(secrets, "classroom_token.json")
+    cache_file = os.path.join(secrets, "classroom_cache.json")
+    shutil.copy2(credentials_path, client_copy)
+    flow = InstalledAppFlow.from_client_secrets_file(credentials_path, CLASSROOM_SCOPES)
+    # This opens the browser on the Windows computer. The user must choose the school account.
+    creds = flow.run_local_server(port=0, access_type="offline", prompt="consent")
+    with open(token_file, "w", encoding="utf-8") as f:
+        f.write(creds.to_json())
+
+    classroom = build("classroom", "v1", credentials=creds, cache_discovery=False)
+    calendar = build("calendar", "v3", credentials=creds, cache_discovery=False)
+    courses = classroom.courses().list(courseStates=["ACTIVE"], pageSize=100).execute().get("courses", [])
+    assignments = []
+    announcements = []
+    for course in courses:
+        cid = course.get("id")
+        try:
+            work = classroom.courses().courseWork().list(
+                courseId=cid, courseWorkStates=["PUBLISHED"], orderBy="dueDate asc", pageSize=100
+            ).execute().get("courseWork", [])
+        except Exception:
+            work = []
+        for item in work:
+            due = item.get("dueDate") or {}
+            assignments.append({
+                "course": course.get("name", ""), "title": item.get("title", ""),
+                "description": item.get("description", ""), "dueDate": due,
+                "dueTime": item.get("dueTime") or {}, "link": item.get("alternateLink", ""),
+            })
+        try:
+            posts = classroom.courses().announcements().list(courseId=cid, pageSize=50).execute().get("announcements", [])
+        except Exception:
+            posts = []
+        for post in posts:
+            announcements.append({"course": course.get("name", ""), "text": post.get("text", ""),
+                                  "creationTime": post.get("creationTime", ""),
+                                  "link": post.get("alternateLink", "")})
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    events = calendar.events().list(calendarId="primary", timeMin=now, maxResults=100,
+                                    singleEvents=True, orderBy="startTime").execute().get("items", [])
+    cache = {"updatedAt": now, "courses": courses, "assignments": assignments,
+             "announcements": announcements, "calendar": events}
+    with open(cache_file, "w", encoding="utf-8") as f:
+        json.dump(cache, f, ensure_ascii=False)
+    prog(58, "Google Classroom data saved to SD card")
+    return len(assignments), len(events)
+
+
 def put_on_sd(drive, ws):
     """Copy raw sketch folders into the SD card's .source/uncompiled tree."""
     root = os.path.join(drive, ".source", "uncompiled")
@@ -635,8 +710,9 @@ def build_and_flash(mode, do_flash, ask_port, ask_target, selected_port=None):
 
 # ------------------------------------------------------------------ the whole job
 def work(opts, ask_port, ask_target):
+    classroom_stage = None
     try:
-        drive, mode, do_dl, do_fl, update_only, manual, selected_port = opts
+        drive, mode, do_dl, do_fl, update_only, manual, selected_port, classroom_enabled, credentials_path = opts
         n = m = 0
         inos = []
         if mode in ("beta", "manual") or do_dl:
@@ -645,6 +721,14 @@ def work(opts, ask_port, ask_target):
             S.summary += ["Source folder: " + workspace(),
                           "Files from GitHub: %d" % n,
                           "Copied from selection/Downloads: %d" % m]
+        if classroom_enabled:
+            if not do_dl or not drive:
+                raise RuntimeError("Enable SD-card installation when Classroom notifications are enabled.")
+            # OAuth happens before wipe/install so the user can sign in and the resulting cache
+            # is then copied into the freshly created /.source/data/secrets folder.
+            classroom_stage = tempfile.mkdtemp(prefix="clock_classroom_")
+            count, events = classroom_setup(credentials_path, classroom_stage)
+            S.summary.append("Google Classroom: %d assignments, %d calendar events saved" % (count, events))
         if do_dl:
             if not update_only:
                 prog(8, "Erasing SD card...")
@@ -652,6 +736,11 @@ def work(opts, ask_port, ask_target):
             prog(15, "Creating folders on the SD card...")
             structure(drive)
             put_on_sd(drive, workspace())
+            if classroom_stage:
+                target = os.path.join(drive, SECRETS_DIR)
+                os.makedirs(target, exist_ok=True)
+                for name in os.listdir(classroom_stage):
+                    shutil.copy2(os.path.join(classroom_stage, name), os.path.join(target, name))
             S.summary.append("SD card: %s  (sketches: %s)" % (drive, ", ".join(inos) or "none"))
             if not update_only:
                 ok, bad = icons(drive, 20, 52)
@@ -670,6 +759,8 @@ def work(opts, ask_port, ask_target):
     except Exception as e:
         S.error = str(e)
     finally:
+        if classroom_stage:
+            shutil.rmtree(classroom_stage, ignore_errors=True)
         S.done = True
 
 
@@ -678,7 +769,7 @@ def main():
     update_only = "update" in [a.lower() for a in sys.argv[1:]]
     root = tk.Tk()
     root.title("Clock Setup")
-    root.geometry("560x500")
+    root.geometry("560x560")
     root.resizable(False, False)
     root.attributes("-topmost", True)
     pad = {"padx": 16}
@@ -721,7 +812,24 @@ def main():
 
     v_dl = tk.BooleanVar(value=False)
     v_fl = tk.BooleanVar(value=True)
+    classroom_var = tk.BooleanVar(value=False)
+    classroom_path = {"value": ""}
     ttk.Checkbutton(root, text="Install source and weather icons to selected SD card", variable=v_dl).pack(anchor="w", **pad)
+    classroom_row = ttk.Frame(root)
+    classroom_row.pack(anchor="w", fill="x", **pad)
+    ttk.Checkbutton(classroom_row, text="Enable Google Classroom notifications", variable=classroom_var).pack(side="left")
+    classroom_label = ttk.Label(classroom_row, text="No OAuth JSON selected", foreground="#666")
+    classroom_label.pack(side="left", padx=(8, 0))
+    def choose_classroom_json():
+        path = filedialog.askopenfilename(parent=root, title="Choose Google OAuth client JSON",
+                                          filetypes=[("JSON files", "*.json"), ("All files", "*.*")])
+        if path:
+            classroom_path["value"] = path
+            classroom_label.configure(text=os.path.basename(path))
+            classroom_var.set(True)
+    ttk.Button(classroom_row, text="Choose OAuth JSON", command=choose_classroom_json).pack(side="right")
+    ttk.Label(root, text="Sign in happens before the SD card is erased or firmware is installed.",
+              foreground="#666").pack(anchor="w", **pad)
     ttk.Checkbutton(root, text="Flash ESP32 after download/build", variable=v_fl).pack(anchor="w", **pad)
 
     ttk.Label(root, text="Flash device (serial ESP32 port)").pack(anchor="w", pady=(10, 2), **pad)
@@ -802,6 +910,17 @@ def main():
     def go():
         selected_mode = mode.get()
         do_dl, do_fl = v_dl.get(), v_fl.get()
+        classroom_enabled = classroom_var.get()
+        credentials_path = classroom_path["value"]
+        if classroom_enabled:
+            if not do_dl:
+                messagebox.showwarning("Google Classroom", "Select SD-card installation so the authorized data can be saved to /.source/data/secrets.", parent=root)
+                return
+            if not credentials_path or not os.path.isfile(credentials_path):
+                choose_classroom_json()
+                credentials_path = classroom_path["value"]
+                if not credentials_path:
+                    return
         selected_port = device_ports.get(device_var.get())
         drive = None
         if do_dl:
@@ -843,7 +962,8 @@ def main():
         start.state(["disabled"])
         combo.state(["disabled"])
         device_combo.state(["disabled"])
-        threading.Thread(target=work, args=((drive, selected_mode, do_dl, do_fl, update_only, manual, selected_port),
+        threading.Thread(target=work, args=((drive, selected_mode, do_dl, do_fl, update_only, manual, selected_port,
+                                             classroom_enabled, credentials_path),
                                             ask_port,
                                             lambda sketches, default: ask_sketch(sketches, root, default)),
                          daemon=True).start()

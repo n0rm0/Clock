@@ -116,3 +116,9 @@ This checklist reflects the requirements in [`agent.md`](agent.md) and the files
 - [x] Place installed raw update sketches under the SD card `.source/uncompiled/updates/` tree.
 - [x] Make the `.bat` launch Python with `pythonw` and a hidden bootstrap process instead of a visible terminal.
 - [x] Add a visible Flash device selector with refresh to the installer window.
+
+- [x] Add installer Classroom notifications: pre-install OAuth sign-in, read-only cache generation, and SD storage under `.source/data/secrets/`.
+- [x] Load cached assignments/projects and show the nearest due item on the home/calendar screens.
+- [x] Refresh the cached assignment display every second; Google sync itself runs during installer authorization rather than once per second.
+- [x] Sleep the display after one minute of inactivity and wake it with a touch.
+- [x] Add a two-tap factory reset that clears local settings, Wi-Fi, Classroom tokens, and cached Classroom data.

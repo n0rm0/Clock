@@ -1,0 +1,7 @@
+# Private Google Classroom OAuth credentials and downloaded cache
+.source/data/secrets/
+
+# Local Python and installer artifacts
+__pycache__/
+*.pyc
+.source/install/__pycache__/
