@@ -132,7 +132,7 @@ struct AlarmState {
   uint8_t day;
   uint8_t repeatMask; // bit 0=Sunday ... bit 6=Saturday; 0 means one-time
 };
-AlarmState alarm = {false, 7, 0, 2026, 1, 1, 0};
+AlarmState clockAlarm = {false, 7, 0, 2026, 1, 1, 0};
 AlarmState alarmDraft = {false, 7, 0, 2026, 1, 1, 0};
 AlarmState clockDraft = {true, 12, 0, 2026, 1, 1, 0};
 bool alarmRinging = false;
@@ -422,8 +422,8 @@ void saveAlarm() {
   SD.mkdir("/.source"); SD.mkdir(DATA_DIR); SD.remove(ALARM_FILE);
   File f = SD.open(ALARM_FILE, FILE_WRITE);
   if (!f) return;
-  f.println(alarm.enabled ? 1 : 0); f.println(alarm.hour); f.println(alarm.minute);
-  f.println(alarm.year); f.println(alarm.month); f.println(alarm.day); f.println(alarm.repeatMask);
+  f.println(clockAlarm.enabled ? 1 : 0); f.println(clockAlarm.hour); f.println(clockAlarm.minute);
+  f.println(clockAlarm.year); f.println(clockAlarm.month); f.println(clockAlarm.day); f.println(clockAlarm.repeatMask);
   f.close();
 }
 
@@ -431,13 +431,13 @@ bool loadAlarm() {
   if (!sdOk) return false;
   File f = SD.open(ALARM_FILE);
   if (!f) return false;
-  alarm.enabled = f.readStringUntil('\n').toInt() != 0;
-  alarm.hour = constrain(f.readStringUntil('\n').toInt(), 0, 23);
-  alarm.minute = constrain(f.readStringUntil('\n').toInt(), 0, 59);
-  alarm.year = constrain(f.readStringUntil('\n').toInt(), 2024, 2099);
-  alarm.month = constrain(f.readStringUntil('\n').toInt(), 1, 12);
-  alarm.day = constrain(f.readStringUntil('\n').toInt(), 1, 31);
-  alarm.repeatMask = f.readStringUntil('\n').toInt() & 0x7F;
+  clockAlarm.enabled = f.readStringUntil('\n').toInt() != 0;
+  clockAlarm.hour = constrain(f.readStringUntil('\n').toInt(), 0, 23);
+  clockAlarm.minute = constrain(f.readStringUntil('\n').toInt(), 0, 59);
+  clockAlarm.year = constrain(f.readStringUntil('\n').toInt(), 2024, 2099);
+  clockAlarm.month = constrain(f.readStringUntil('\n').toInt(), 1, 12);
+  clockAlarm.day = constrain(f.readStringUntil('\n').toInt(), 1, 31);
+  clockAlarm.repeatMask = f.readStringUntil('\n').toInt() & 0x7F;
   f.close();
   return true;
 }
@@ -508,16 +508,16 @@ String alarmTimeText(const AlarmState& a) {
 }
 
 String nextAlarmText() {
-  if (!alarm.enabled) return "No alarm";
-  return alarmTimeText(alarm) + (alarm.repeatMask ? "  Repeating" : "  One-time");
+  if (!clockAlarm.enabled) return "No alarm";
+  return alarmTimeText(clockAlarm) + (clockAlarm.repeatMask ? "  Repeating" : "  One-time");
 }
 
 bool alarmDueNow() {
-  if (!alarm.enabled) return false;
+  if (!clockAlarm.enabled) return false;
   struct tm ti;
-  if (!getLocalTime(&ti, 0) || ti.tm_hour != alarm.hour || ti.tm_min != alarm.minute) return false;
-  if (alarm.repeatMask) return (alarm.repeatMask & (1 << ti.tm_wday)) != 0;
-  return ti.tm_year + 1900 == alarm.year && ti.tm_mon + 1 == alarm.month && ti.tm_mday == alarm.day;
+  if (!getLocalTime(&ti, 0) || ti.tm_hour != clockAlarm.hour || ti.tm_min != clockAlarm.minute) return false;
+  if (clockAlarm.repeatMask) return (clockAlarm.repeatMask & (1 << ti.tm_wday)) != 0;
+  return ti.tm_year + 1900 == clockAlarm.year && ti.tm_mon + 1 == clockAlarm.month && ti.tm_mday == clockAlarm.day;
 }
 
 void drawAlarmIcon(int cx, int cy, uint16_t color) {
@@ -853,7 +853,7 @@ void drawAlarmEditor() {
 }
 
 void showAlarmEditor() {
-  alarmDraft = alarm;
+  alarmDraft = clockAlarm;
   if (!alarmDraft.enabled) {
     struct tm ti;
     if (getLocalTime(&ti, 0)) {
@@ -906,14 +906,14 @@ void showAlarmRinging() {
   tft.fillScreen(UI_RED);
   drawAlarmIcon(240, 72, 0xFFFF);
   txt(F24B, 0xFFFF, TC_DATUM, "ALARM", 240, 132);
-  txt(F12B, 0xFFFF, TC_DATUM, alarmTimeText(alarm), 240, 184);
+  txt(F12B, 0xFFFF, TC_DATUM, alarmTimeText(clockAlarm), 240, 184);
   alarmButton(150, 245, 180, "Dismiss", false);
 }
 
 void dismissAlarm() {
   alarmRinging = false;
   digitalWrite(LED_G, HIGH);
-  if (!alarm.repeatMask) { alarm.enabled = false; saveAlarm(); }
+  if (!clockAlarm.repeatMask) { clockAlarm.enabled = false; saveAlarm(); }
   showHome();
 }
 
@@ -1239,7 +1239,7 @@ void loop() {
       drawAlarmEditor();
     } else if (y >= 266) {
       if (x < 130) alarmDraft.enabled = !alarmDraft.enabled;
-      else if (x >= 240 && x < 355) { alarm = alarmDraft; saveAlarm(); showHome(); }
+      else if (x >= 240 && x < 355) { clockAlarm = alarmDraft; saveAlarm(); showHome(); }
       else if (x >= 355) showHome();
       else drawAlarmEditor();
     }

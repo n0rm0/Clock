@@ -123,3 +123,10 @@ This checklist reflects the requirements in [`agent.md`](agent.md) and the files
 - [x] Sleep the display after one minute of inactivity and wake it with a touch.
 - [x] Add a two-tap factory reset that clears local settings, Wi-Fi, Classroom tokens, and cached Classroom data.
 - [x] Search common user folders for OAuth-shaped JSON files and ask for confirmation before auto-selecting one.
+
+## Tomorrow's follow-up
+
+- [ ] Fix Windows installer dependency bootstrap: `google_auth_oauthlib` was still missing after the installer reported Google support installation; use the same Python interpreter that launches the GUI and verify the import before continuing.
+- [ ] Finish the Arduino CLI build with ESP32 2.0.17 after the `clockAlarm` rename and resolve any remaining compiler errors.
+- [ ] Confirm the `.bin` is produced and copy the verified clock binary into `.source/compiled/updates/updateV1/` before releasing it for Auto mode.
+- [ ] Test the updated `.bat` on Windows: OAuth JSON auto-detection, school-account sign-in, SD-card secret/cache placement, flashing, and headless launcher behavior.
