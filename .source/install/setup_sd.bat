@@ -1,8 +1,8 @@
 @echo off
 if /I not "%~1"=="--clock-hidden" (
     set "VBS=%TEMP%\clock_setup_%RANDOM%.vbs"
-    >"%VBS%" echo Set sh = CreateObject("WScript.Shell")
-    >>"%VBS%" echo sh.Run Chr(34) ^& "%~f0" ^& Chr(34) ^& " --clock-hidden", 0, False
+    >"%VBS%" echo Set sh = CreateObject^("WScript.Shell"^)
+    >>"%VBS%" echo sh.Run Chr^(34^) ^& "%~f0" ^& Chr^(34^) ^& " --clock-hidden", 0, False
     wscript.exe //nologo "%VBS%" >nul 2>&1
     del "%VBS%" >nul 2>&1
     exit /b 0
