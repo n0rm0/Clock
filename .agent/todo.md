@@ -104,6 +104,10 @@ This checklist reflects the requirements in [`agent.md`](agent.md) and the files
 - [x] Set the clock display rotation to 180 degrees (`TFT_ROTATION 3`).
 - [x] Add a standalone raw-touch coordinate sketch; final touch mapping remains pending the user's Serial Monitor readings.
 - [x] Hardwire the latest official TFT_eSPI touch calibration `{365, 3431, 321, 3368, 7}` for the 180-degree display orientation.
+- [x] Add Wi-Fi IP-based local weather lookup with Open-Meteo current conditions.
+- [x] Add weather icon fallback drawing when SD PNG assets are unavailable.
+- [x] Align compact Wi-Fi/battery indicators and add the next-alarm row below the time.
+- [x] Add a touch-opened alarm editor supporting time, date, one-time alarms, and repeat-day alarms.
 - [x] Remove the generated `extras` folder from source arrangement.
 - [x] Place installed raw update sketches under the SD card `.source/uncompiled/updates/` tree.
 - [x] Make the `.bat` launch Python with `pythonw` and a hidden bootstrap process instead of a visible terminal.

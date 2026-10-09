@@ -13,6 +13,9 @@
 #include <SPI.h>
 #include <SD.h>
 #include <WiFi.h>
+#include <HTTPClient.h>
+#include <WiFiClientSecure.h>
+#include <ArduinoJson.h>
 #include <time.h>
 #include <TFT_eSPI.h>
 #include <PNGdec.h>
@@ -22,6 +25,7 @@
 // Arduino's automatic prototype generation sees keyLabel() before the full
 // declaration below. Keep the type visible to that generated prototype.
 struct Key;
+struct AlarmState;
 
 TFT_eSPI tft = TFT_eSPI();
 TFT_eSprite spr = TFT_eSprite(&tft);
@@ -30,7 +34,7 @@ TFT_eSprite spr = TFT_eSprite(&tft);
 #define C(r,g,b) tft.color565(r,g,b)
 uint16_t UI_BLUE, UI_BACK, UI_TEXT, UI_KEY, UI_LIP, UI_RED, UI_YEL, UI_GREEN;
 
-enum Screen { S_WELCOME, S_SCAN, S_KEYS, S_HOME };
+enum Screen { S_WELCOME, S_SCAN, S_KEYS, S_HOME, S_ALARM };
 Screen screen = S_WELCOME;
 
 String selSsid, password, errMsg;
@@ -103,6 +107,30 @@ static File pngFile;
 static int pngX, pngY;
 static uint16_t lineBuf[480];
 
+struct WeatherState {
+  bool valid;
+  float temperatureF;
+  int code;
+  String city;
+  String icon;
+  String label;
+};
+WeatherState weather = {false, 0.0f, -1, "", "not-available", "Weather offline"};
+uint32_t lastWeatherFetch = 0;
+
+struct AlarmState {
+  bool enabled;
+  uint8_t hour;
+  uint8_t minute;
+  uint16_t year;
+  uint8_t month;
+  uint8_t day;
+  uint8_t repeatMask; // bit 0=Sunday ... bit 6=Saturday; 0 means one-time
+};
+AlarmState alarm = {false, 7, 0, 2026, 1, 1, 0};
+AlarmState alarmDraft = {false, 7, 0, 2026, 1, 1, 0};
+bool alarmRinging = false;
+
 static void* pngOpen(const char* fn, int32_t* size) { pngFile = SD.open(fn); *size = pngFile ? pngFile.size() : 0; return &pngFile; }
 static void pngClose(void*) { if (pngFile) pngFile.close(); }
 static int32_t pngRead(PNGFILE*, uint8_t* buf, int32_t len) { return pngFile ? pngFile.read(buf, len) : 0; }
@@ -120,6 +148,94 @@ bool drawPng(const char* path, int x, int y) {
   tft.startWrite(); png.decode(NULL, 0); tft.endWrite();
   png.close();
   return true;
+}
+
+String weatherIconForCode(int code) {
+  if (code == 0) return "clear-day";
+  if (code <= 3) return "partly-cloudy-day";
+  if (code <= 48) return "fog";
+  if (code <= 57) return "drizzle";
+  if (code <= 67 || (code >= 80 && code <= 82)) return "rain";
+  if (code <= 77) return "snow";
+  if (code >= 95) return "thunderstorms";
+  return "cloudy";
+}
+
+String weatherLabelForCode(int code) {
+  if (code == 0) return "Clear";
+  if (code <= 3) return "Partly cloudy";
+  if (code <= 48) return "Fog";
+  if (code <= 57) return "Drizzle";
+  if (code <= 67 || (code >= 80 && code <= 82)) return "Rain";
+  if (code <= 77) return "Snow";
+  if (code >= 95) return "Storm";
+  return "Cloudy";
+}
+
+bool fetchWeather() {
+  if (WiFi.status() != WL_CONNECTED) return false;
+  lastWeatherFetch = millis();
+  WiFiClientSecure client;
+  client.setInsecure(); // ESP32 has no bundled CA store; data is non-sensitive.
+  HTTPClient http;
+  double lat = WEATHER_LAT, lon = WEATHER_LON;
+  String city = "Local";
+
+  if (http.begin(client, "https://ipapi.co/json/")) {
+    int status = http.GET();
+    if (status == HTTP_CODE_OK) {
+      DynamicJsonDocument geo(1536);
+      if (deserializeJson(geo, http.getString()) == DeserializationError::Ok) {
+        lat = geo["latitude"] | WEATHER_LAT;
+        lon = geo["longitude"] | WEATHER_LON;
+        city = (const char*)(geo["city"] | "Local");
+      }
+    }
+    http.end();
+  }
+
+  char url[300];
+  snprintf(url, sizeof(url),
+           "https://api.open-meteo.com/v1/forecast?latitude=%.5f&longitude=%.5f&current=temperature_2m,weather_code&temperature_unit=fahrenheit&timezone=auto",
+           lat, lon);
+  if (!http.begin(client, url)) return false;
+  int status = http.GET();
+  if (status != HTTP_CODE_OK) { http.end(); return false; }
+  DynamicJsonDocument doc(4096);
+  DeserializationError error = deserializeJson(doc, http.getString());
+  http.end();
+  if (error) return false;
+
+  weather.temperatureF = doc["current"]["temperature_2m"] | 0.0f;
+  weather.code = doc["current"]["weather_code"] | -1;
+  weather.city = city;
+  weather.icon = weatherIconForCode(weather.code);
+  weather.label = weatherLabelForCode(weather.code);
+  weather.valid = weather.code >= 0;
+  return weather.valid;
+}
+
+void drawWeatherFallback(int x, int y, int code) {
+  // Always show a visible icon even when SD icons were not installed.
+  if (code >= 51 && code <= 82) {
+    tft.fillCircle(x + 42, y + 38, 20, COL_WHITE);
+    tft.fillCircle(x + 62, y + 34, 25, COL_WHITE);
+    tft.fillRoundRect(x + 20, y + 36, 72, 28, 12, COL_WHITE);
+    for (int i = 0; i < 3; i++) tft.drawLine(x + 28 + i * 22, y + 74, x + 20 + i * 22, y + 88, COL_BLUE);
+  } else if (code >= 95) {
+    tft.fillCircle(x + 48, y + 45, 28, UI_YEL);
+    tft.drawLine(x + 42, y + 78, x + 30, y + 94, UI_YEL);
+    tft.drawLine(x + 62, y + 78, x + 74, y + 94, UI_YEL);
+  } else {
+    tft.fillCircle(x + 52, y + 48, 28, UI_YEL);
+    tft.drawCircle(x + 52, y + 48, 35, UI_YEL);
+  }
+}
+
+void drawWeatherIcon(int x, int y) {
+  char path[96];
+  snprintf(path, sizeof(path), "%s/%s.png", ICON_DIR, weather.icon.c_str());
+  if (!drawPng(path, x, y)) drawWeatherFallback(x, y, weather.code);
 }
 
 // ====================================================================
@@ -204,21 +320,21 @@ void animateLoader(int cx, int cy) {            // call every ~16 ms
 int rssiLevel(int rssi) { return rssi > -60 ? 3 : rssi > -70 ? 2 : rssi > -80 ? 1 : 0; }
 
 void drawWifiSignal(int cx, int by, int level, uint16_t bg, uint16_t lit, uint16_t dim) {
-  const int R[3] = {12, 22, 32};
-  tft.fillRect(cx - 38, by - 40, 76, 46, bg);
+  const int R[3] = {7, 13, 19};
+  tft.fillRect(cx - 24, by - 25, 48, 30, bg);
   for (int i = 0; i < 3; i++)
-    arcLovy(tft, cx, by, R[i], 6, 225.0f, 90.0f, (level > i) ? lit : dim, bg);
-  tft.fillCircle(cx, by - 1, 4, level > 0 ? lit : dim);
+    arcLovy(tft, cx, by, R[i], 4, 225.0f, 90.0f, (level > i) ? lit : dim, bg);
+  tft.fillCircle(cx, by - 1, 3, level > 0 ? lit : dim);
 }
 
 void drawBattery(int x, int y, int pct, uint16_t bg, uint16_t line) {
-  tft.fillRect(x - 2, y - 2, 70, 28, bg);
-  tft.fillRoundRect(x, y, 60, 22, 3, line);
-  tft.fillRoundRect(x + 2, y + 2, 56, 18, 2, bg);
-  tft.fillRoundRect(x + 58, y + 5, 4, 12, 2, line);
+  tft.fillRect(x - 2, y - 2, 54, 22, bg);
+  tft.fillRoundRect(x, y, 44, 16, 3, line);
+  tft.fillRoundRect(x + 2, y + 2, 40, 12, 2, bg);
+  tft.fillRoundRect(x + 42, y + 4, 3, 8, 2, line);
   uint16_t col = pct <= 20 ? UI_RED : pct <= 45 ? UI_YEL : UI_GREEN;
-  int w = max(1, pct * 50 / 100);
-  tft.fillRect(x + 5, y + 5, w, 12, col);
+  int w = max(1, pct * 34 / 100);
+  tft.fillRect(x + 5, y + 4, w, 8, col);
 }
 
 int readBatteryPct() {
@@ -251,6 +367,59 @@ bool loadCreds() {
   password = f.readStringUntil('\n'); password.trim();
   f.close();
   return selSsid.length() > 0;
+}
+
+void saveAlarm() {
+  if (!sdOk) return;
+  SD.mkdir("/.source"); SD.mkdir(DATA_DIR); SD.remove(ALARM_FILE);
+  File f = SD.open(ALARM_FILE, FILE_WRITE);
+  if (!f) return;
+  f.println(alarm.enabled ? 1 : 0); f.println(alarm.hour); f.println(alarm.minute);
+  f.println(alarm.year); f.println(alarm.month); f.println(alarm.day); f.println(alarm.repeatMask);
+  f.close();
+}
+
+bool loadAlarm() {
+  if (!sdOk) return false;
+  File f = SD.open(ALARM_FILE);
+  if (!f) return false;
+  alarm.enabled = f.readStringUntil('\n').toInt() != 0;
+  alarm.hour = constrain(f.readStringUntil('\n').toInt(), 0, 23);
+  alarm.minute = constrain(f.readStringUntil('\n').toInt(), 0, 59);
+  alarm.year = constrain(f.readStringUntil('\n').toInt(), 2024, 2099);
+  alarm.month = constrain(f.readStringUntil('\n').toInt(), 1, 12);
+  alarm.day = constrain(f.readStringUntil('\n').toInt(), 1, 31);
+  alarm.repeatMask = f.readStringUntil('\n').toInt() & 0x7F;
+  f.close();
+  return true;
+}
+
+String alarmTimeText(const AlarmState& a) {
+  char b[12]; int h = a.hour % 12; if (!h) h = 12;
+  snprintf(b, sizeof(b), "%d:%02d %s", h, a.minute, a.hour < 12 ? "AM" : "PM");
+  return String(b);
+}
+
+String nextAlarmText() {
+  if (!alarm.enabled) return "No alarm";
+  return alarmTimeText(alarm) + (alarm.repeatMask ? "  Repeating" : "  One-time");
+}
+
+bool alarmDueNow() {
+  if (!alarm.enabled) return false;
+  struct tm ti;
+  if (!getLocalTime(&ti, 0) || ti.tm_hour != alarm.hour || ti.tm_min != alarm.minute) return false;
+  if (alarm.repeatMask) return (alarm.repeatMask & (1 << ti.tm_wday)) != 0;
+  return ti.tm_year + 1900 == alarm.year && ti.tm_mon + 1 == alarm.month && ti.tm_mday == alarm.day;
+}
+
+void drawAlarmIcon(int cx, int cy, uint16_t color) {
+  tft.drawCircle(cx, cy, 9, color);
+  tft.drawLine(cx - 7, cy - 8, cx - 11, cy - 13, color);
+  tft.drawLine(cx + 7, cy - 8, cx + 11, cy - 13, color);
+  tft.drawLine(cx, cy, cx, cy - 5, color);
+  tft.drawLine(cx, cy, cx + 4, cy + 3, color);
+  tft.drawFastHLine(cx - 12, cy + 11, 24, color);
 }
 
 void loaderScreen(const char* msg) {
@@ -393,9 +562,7 @@ void showKeyboard() {
 }
 
 // ---- home (from the sketch) ----
-const char* DEMO_WEATHER_ICON = "rain";
-const char* DEMO_WEATHER_WORD = "rain  72";   // degree sign is drawn separately
-const char* DEMO_EVENT        = "Work  11pm";
+const char* DEMO_EVENT        = "No calendar connected";
 
 // big 7-segment digits (drawn, so they can be any size)
 //  bits: 0 top, 1 top-right, 2 bottom-right, 3 bottom, 4 bottom-left, 5 top-left, 6 middle
@@ -447,27 +614,119 @@ void drawTimeBlock() {
 
 void drawStatusBlock() {
   tft.fillRect(0, 226, 240, 94, 0x0000);
+  drawAlarmIcon(16, 246, alarm.enabled ? UI_YEL : COL_DIM);
+  txt(F12, COL_DIM, ML_DATUM, "Next alarm", 34, 233);
+  String next = nextAlarmText();
+  if (next.length() > 28) next = next.substring(0, 28);
+  txt(F12B, COL_WHITE, ML_DATUM, next, 34, 250);
   int lvl = (WiFi.status() == WL_CONNECTED) ? rssiLevel(WiFi.RSSI()) : 0;
-  drawWifiSignal(50, 300, lvl, 0x0000, COL_WHITE, 0x39E7);
+  drawWifiSignal(28, 307, lvl, 0x0000, COL_WHITE, 0x39E7);
   int pct = readBatteryPct();
-  drawBattery(100, 258, pct, 0x0000, COL_WHITE);
+  drawBattery(170, 298, pct, 0x0000, COL_WHITE);
   char b[8]; snprintf(b, sizeof(b), "%d%%", pct);
-  txt(F12B, COL_WHITE, ML_DATUM, b, 175, 269);
+  txt(F12, COL_DIM, ML_DATUM, b, 218, 301);
 }
 
 void drawRightPanel() {
   tft.fillRect(241, 0, 239, 320, 0x0000);
-  char path[96]; snprintf(path, sizeof(path), "%s/%s.png", ICON_DIR, DEMO_WEATHER_ICON);
-  if (!drawPng(path, 312, 8)) tft.drawRoundRect(312, 8, 96, 96, 10, COL_DIM);
-  // "rain  72" + degree circle, centered
+  drawWeatherIcon(312, 8);
+  String weatherWord = weather.valid ? weather.label + "  " + String((int)roundf(weather.temperatureF)) : "Weather offline";
   tft.setFreeFont(F18B);
-  int tw = tft.textWidth(DEMO_WEATHER_WORD);
+  int tw = tft.textWidth(weatherWord);
   int x0 = 360 - (tw + 14) / 2;
-  txt(F18B, COL_WHITE, TL_DATUM, DEMO_WEATHER_WORD, x0, 116);
+  txt(F18B, COL_WHITE, TL_DATUM, weatherWord, x0, 116);
   tft.drawCircle(x0 + tw + 7, 124, 4, COL_WHITE); tft.drawCircle(x0 + tw + 7, 124, 3, COL_WHITE);
+  String place = weather.valid ? weather.city : "Connect WiFi for local weather";
+  if (place.length() > 24) place = place.substring(0, 24);
+  txt(F12, COL_DIM, TC_DATUM, place, 360, 148);
   tft.drawFastHLine(241, 167, 239, 0x7BEF);
   txt(F18B, COL_WHITE, TL_DATUM, "Calendar", 256, 182);
   txt(F12, COL_DIM, TL_DATUM, DEMO_EVENT, 256, 228);
+}
+
+int daysInMonth(uint16_t year, uint8_t month) {
+  const uint8_t days[] = {31,28,31,30,31,30,31,31,30,31,30,31};
+  if (month == 2 && ((year % 4 == 0 && year % 100 != 0) || year % 400 == 0)) return 29;
+  return days[constrain(month, 1, 12) - 1];
+}
+
+void adjustAlarmDate(int field, int amount) {
+  if (field == 0) {
+    int d = alarmDraft.day + amount;
+    if (d < 1) d = daysInMonth(alarmDraft.year, alarmDraft.month);
+    if (d > daysInMonth(alarmDraft.year, alarmDraft.month)) d = 1;
+    alarmDraft.day = d;
+  } else if (field == 1) {
+    int m = alarmDraft.month + amount;
+    if (m < 1) m = 12; if (m > 12) m = 1;
+    alarmDraft.month = m;
+    alarmDraft.day = min((int)alarmDraft.day, daysInMonth(alarmDraft.year, m));
+  } else {
+    int y = constrain((int)alarmDraft.year + amount, 2024, 2099);
+    alarmDraft.year = y;
+    alarmDraft.day = min((int)alarmDraft.day, daysInMonth(y, alarmDraft.month));
+  }
+}
+
+void alarmButton(int x, int y, int w, const String& label, bool selected = false) {
+  tft.fillRoundRect(x, y, w, 30, 6, selected ? UI_BLUE : UI_KEY);
+  tft.drawRoundRect(x, y, w, 30, 6, selected ? UI_BLUE : UI_LIP);
+  txt(F12B, selected ? UI_TEXT : 0x0000, MC_DATUM, label, x + w / 2, y + 15);
+}
+
+void drawAlarmEditor() {
+  tft.fillScreen(UI_BACK);
+  txt(F12B, 0x0000, TC_DATUM, "New Alarm", 240, 16);
+  txt(F24B, 0x0000, TC_DATUM, alarmTimeText(alarmDraft), 240, 52);
+  alarmButton(18, 78, 78, "Hour -"); alarmButton(106, 78, 78, "Hour +");
+  alarmButton(296, 78, 78, "Min -"); alarmButton(384, 78, 78, "Min +");
+
+  char date[20]; snprintf(date, sizeof(date), "%02u/%02u/%04u", alarmDraft.month, alarmDraft.day, alarmDraft.year);
+  txt(F18B, 0x0000, TC_DATUM, date, 240, 124);
+  alarmButton(8, 143, 72, "Day -"); alarmButton(86, 143, 72, "Day +");
+  alarmButton(164, 143, 78, "Month -"); alarmButton(248, 143, 78, "Month +");
+  alarmButton(332, 143, 68, "Year -"); alarmButton(406, 143, 68, "Year +");
+
+  txt(F12, 0x0000, ML_DATUM, "Repeat", 8, 190);
+  const char* names[] = {"S","M","T","W","T","F","S"};
+  for (int i = 0; i < 7; i++) alarmButton(8 + i * 67, 205, 60, names[i], alarmDraft.repeatMask & (1 << i));
+  alarmButton(8, 266, 112, alarmDraft.enabled ? "Disable" : "Enable");
+  alarmButton(250, 266, 100, "Save", true);
+  alarmButton(360, 266, 110, "Cancel");
+  txt(F12, 0x0000, TC_DATUM, "Tap Save to keep this alarm", 240, 307);
+}
+
+void showAlarmEditor() {
+  alarmDraft = alarm;
+  if (!alarmDraft.enabled) {
+    struct tm ti;
+    if (getLocalTime(&ti, 0)) {
+      alarmDraft.year = ti.tm_year + 1900;
+      alarmDraft.month = ti.tm_mon + 1;
+      alarmDraft.day = ti.tm_mday;
+      alarmDraft.hour = (ti.tm_hour + 1) % 24;
+      alarmDraft.minute = 0;
+    }
+  }
+  screen = S_ALARM;
+  drawAlarmEditor();
+}
+
+void showAlarmRinging() {
+  alarmRinging = true;
+  digitalWrite(LED_G, LOW);
+  tft.fillScreen(UI_RED);
+  drawAlarmIcon(240, 72, 0xFFFF);
+  txt(F24B, 0xFFFF, TC_DATUM, "ALARM", 240, 132);
+  txt(F12B, 0xFFFF, TC_DATUM, alarmTimeText(alarm), 240, 184);
+  alarmButton(150, 245, 180, "Dismiss", false);
+}
+
+void dismissAlarm() {
+  alarmRinging = false;
+  digitalWrite(LED_G, HIGH);
+  if (!alarm.repeatMask) { alarm.enabled = false; saveAlarm(); }
+  showHome();
 }
 
 void showHome() {
@@ -521,6 +780,8 @@ void setup() {
 
   if (sdOk && loadCreds() && tryConnect(15000)) {
     configTzTime(TIME_TZ, NTP_SERVER);
+    fetchWeather();
+    loadAlarm();
     runUpdate();
     showHome();
   } else {
@@ -564,6 +825,8 @@ void loop() {
             if (tryConnect(15000)) {
               saveCreds();
               configTzTime(TIME_TZ, NTP_SERVER);
+              fetchWeather();
+              loadAlarm();
               runUpdate();
               showHome();
             } else {
@@ -577,14 +840,48 @@ void loop() {
     }
 
   } else if (screen == S_HOME) {
+    if (alarmRinging) {
+      if (readTouch(x, y)) dismissAlarm();
+      return;
+    }
+    if (readTouch(x, y)) {
+      // Tapping the clock/time panel opens the alarm editor.
+      if (x < 240 && y < 225) { showAlarmEditor(); return; }
+    }
+    if (alarmDueNow()) { showAlarmRinging(); return; }
     if (millis() - lastTick > 1000) {
       lastTick = millis();
       struct tm ti;
       if (getLocalTime(&ti, 0) && ti.tm_min != lastMin) { lastMin = ti.tm_min; drawTimeBlock(); }
       static uint32_t lastStatus = 0;
       if (millis() - lastStatus > 30000) { lastStatus = millis(); drawStatusBlock(); }
+      if (millis() - lastWeatherFetch > WEATHER_REFRESH_MS) {
+        fetchWeather(); drawRightPanel();
+      }
       static uint32_t lastUpdate = millis();
       if (millis() - lastUpdate > UPDATE_CHECK_MS) { lastUpdate = millis(); runUpdate(); showHome(); }
+    }
+  } else if (screen == S_ALARM) {
+    if (!readTouch(x, y)) return;
+    if (y >= 78 && y < 112) {
+      if (x < 100) alarmDraft.hour = (alarmDraft.hour + 23) % 24;
+      else if (x < 200) alarmDraft.hour = (alarmDraft.hour + 1) % 24;
+      else if (x >= 285 && x < 380) alarmDraft.minute = (alarmDraft.minute + 59) % 60;
+      else if (x >= 380) alarmDraft.minute = (alarmDraft.minute + 1) % 60;
+      drawAlarmEditor();
+    } else if (y >= 143 && y < 177) {
+      if (x < 82) adjustAlarmDate(0, -1); else if (x < 160) adjustAlarmDate(0, 1);
+      else if (x < 245) adjustAlarmDate(1, -1); else if (x < 330) adjustAlarmDate(1, 1);
+      else if (x < 405) adjustAlarmDate(2, -1); else adjustAlarmDate(2, 1);
+      drawAlarmEditor();
+    } else if (y >= 205 && y < 240) {
+      int i = x / 67; if (i >= 0 && i < 7) alarmDraft.repeatMask ^= (1 << i);
+      drawAlarmEditor();
+    } else if (y >= 266) {
+      if (x < 130) alarmDraft.enabled = !alarmDraft.enabled;
+      else if (x >= 240 && x < 355) { alarm = alarmDraft; saveAlarm(); showHome(); }
+      else if (x >= 355) showHome();
+      else drawAlarmEditor();
     }
   }
 }
