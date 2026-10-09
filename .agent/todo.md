@@ -95,3 +95,7 @@ This checklist reflects the requirements in [`agent.md`](agent.md) and the files
 - [ ] Test Manual mode with a selected folder containing an application or bootloader `.ino` and its headers.
 - [ ] Confirm the port picker excludes SD-card volumes and labels the ESP32 as `ESP32 Dev Module` when detected.
 - [ ] Confirm compile-only output is a named `.bin` matching the compiled sketch.
+- [x] Prevent Beta mode from compiling stale `clock` sketches left in the local workspace.
+- [x] Save successful compile-only binaries to `Downloads/ClockBuilds/<sketch>.bin`.
+- [x] Add an explicit firmware-target picker before selecting the ESP32 serial port; Manual mode can target a bootloader sketch.
+- [x] Show cleaned, expanded compiler diagnostics when a build fails.

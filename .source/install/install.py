@@ -215,6 +215,19 @@ def arrange(stage, dest):
     return inos
 
 
+def remove_stale_sketches(dest, current_inos):
+    """Remove old generated sketch folders so Beta cannot compile a stale clock copy."""
+    current = {os.path.splitext(os.path.basename(x))[0].lower() for x in current_inos}
+    if not os.path.isdir(dest):
+        return
+    for entry in os.scandir(dest):
+        if not entry.is_dir() or entry.name.startswith("."):
+            continue
+        ino = os.path.join(entry.path, entry.name + ".ino")
+        if os.path.isfile(ino) and entry.name.lower() not in current:
+            shutil.rmtree(entry.path, ignore_errors=True)
+
+
 def workspace():
     docs = os.path.join(os.path.expanduser("~"), "Documents")
     return os.path.join(docs if os.path.isdir(docs) else os.path.expanduser("~"), "ClockSource")
@@ -248,6 +261,8 @@ def get_source(manual=None):
             n = fetch_repo(stage)
             m = grab_downloads(stage)
         inos = arrange(stage, ws)
+        if not manual:
+            remove_stale_sketches(ws, inos)
     finally:
         shutil.rmtree(stage, ignore_errors=True)
     return n, m, inos
@@ -424,10 +439,10 @@ def run_cli(cli, args, lo, hi, label):
                          text=True, errors="replace", creationflags=NO_WINDOW)
     tail, cur = [], lo
     for line in p.stdout:
-        line = line.strip()
+        line = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", line).strip()
         if not line:
             continue
-        tail = (tail + [line])[-15:]
+        tail = (tail + [line])[-40:]
         cur = min(hi - 1, cur + 0.2)
         prog(int(cur), "%s  %s" % (label, line[:48]))
     p.wait()
@@ -448,7 +463,7 @@ def serial_ports(cli):
         for item in data:
             port = item.get("port", {})
             address = port.get("address", "")
-            if not address or port.get("protocol") != "serial" or address in seen:
+            if not address or port.get("protocol") != "serial" or re.fullmatch(r"[A-Za-z]:", address) or address in seen:
                 continue
             seen.add(address)
             boards = item.get("matching_boards") or item.get("boards") or []
@@ -515,10 +530,54 @@ def build_sketches(cli, sketches):
         run_cli(cli, ["compile", "--fqbn", FQBN, "--build-property", "compiler.cpp.extra_flags=" + TFT_FLAGS,
                       "--output-dir", os.path.join(build, name), os.path.join(workspace(), name)],
                 lo, int(lo + span), "Compiling %s" % name)
+        output = os.path.join(build, name, name + ".ino.bin")
+        if not os.path.isfile(output):
+            output = os.path.join(build, name, name + ".bin")
+        if not os.path.isfile(output):
+            raise RuntimeError("Compilation finished but no %s.bin was produced for %s" % (name, name))
     return build
 
 
-def build_and_flash(mode, do_flash, ask_port):
+def save_named_binaries(build, sketches):
+    target_dir = os.path.join(os.path.expanduser("~"), "Downloads", "ClockBuilds")
+    os.makedirs(target_dir, exist_ok=True)
+    saved = []
+    for name in sketches:
+        candidates = (os.path.join(build, name, name + ".ino.bin"),
+                      os.path.join(build, name, name + ".bin"))
+        source = next((p for p in candidates if os.path.isfile(p)), None)
+        if source:
+            target = os.path.join(target_dir, name + ".bin")
+            shutil.copy2(source, target)
+            saved.append(target)
+    return saved
+
+
+def ask_sketch(sketches, root, default=None):
+    """Ask which compiled sketch should be flashed; manual mode can select bootloaderV1."""
+    if len(sketches) == 1:
+        return sketches[0]
+    box, ev = {}, threading.Event()
+    def ask():
+        dialog = tk.Toplevel(root)
+        dialog.title("Select firmware to flash")
+        dialog.transient(root)
+        dialog.grab_set()
+        ttk.Label(dialog, text="Select the compiled firmware to upload:").pack(padx=16, pady=(14, 6))
+        combo = ttk.Combobox(dialog, values=sketches, state="readonly", width=42)
+        combo.current(sketches.index(default) if default in sketches else 0)
+        combo.pack(padx=16, pady=4)
+        def choose():
+            box["name"] = combo.get()
+            dialog.destroy(); ev.set()
+        ttk.Button(dialog, text="Use selected firmware", command=choose).pack(pady=(6, 14))
+        dialog.protocol("WM_DELETE_WINDOW", lambda: (dialog.destroy(), ev.set()))
+    root.after(0, ask)
+    ev.wait()
+    return box.get("name")
+
+
+def build_and_flash(mode, do_flash, ask_port, ask_target):
     cli = find_cli()
     if mode == "auto":
         path, binary = download_latest_binary()
@@ -536,6 +595,10 @@ def build_and_flash(mode, do_flash, ask_port):
     ws = workspace()
     sketches = sorted(e.name for e in os.scandir(ws)
                       if e.is_dir() and os.path.isfile(os.path.join(e.path, e.name + ".ino")))
+    if mode == "beta":
+        sketches = [name for name in sketches if name.lower().startswith("updatev")]
+        if not sketches:
+            raise RuntimeError("No updateV sketch was found in the newest raw source.")
     if not sketches:
         raise RuntimeError("No sketches found in " + ws)
     prog(55, "Preparing Arduino tools...")
@@ -543,22 +606,26 @@ def build_and_flash(mode, do_flash, ask_port):
     run_cli(cli, ["core", "install", CORE, "--additional-urls", ESP_INDEX], 58, 72, "Installing ESP32 board support")
     run_cli(cli, ["lib", "install"] + LIBS, 72, 76, "Installing libraries")
     build = build_sketches(cli, sketches)
+    saved = save_named_binaries(build, sketches)
     if not do_flash:
-        return "Built beta/manual sketches: " + ", ".join(sketches), sketches
+        return "Built %s; .bin output: %s" % (", ".join(sketches), ", ".join(saved)), sketches
     ports = serial_ports(cli)
     if not ports:
         raise RuntimeError("No serial ESP32 port found. The SD-card drive is not a flash port.")
+    target = ask_target(sketches, FLASH_SKETCH if mode == "beta" else sketches[0])
+    if not target:
+        raise Cancelled()
     port = ask_port(ports)
     if not port:
         raise Cancelled()
-    sk = FLASH_SKETCH if mode == "beta" and FLASH_SKETCH in sketches else sketches[0]
+    sk = target
     run_cli(cli, ["upload", "--fqbn", FQBN, "-p", port, "--input-dir", os.path.join(build, sk),
                   os.path.join(ws, sk)], 91, 99, "Flashing %s to %s" % (sk, port))
     return "Flashed %s to %s" % (sk, port), sketches
 
 
 # ------------------------------------------------------------------ the whole job
-def work(opts, ask_port):
+def work(opts, ask_port, ask_target):
     try:
         drive, mode, do_dl, do_fl, update_only, manual = opts
         n = m = 0
@@ -583,10 +650,10 @@ def work(opts, ask_port):
         if mode == "auto" and not do_dl:
             prog(20, "Finding newest compiled firmware...")
         if do_fl or mode == "auto":
-            msg, _ = build_and_flash(mode, do_fl, ask_port)
+            msg, _ = build_and_flash(mode, do_fl, ask_port, ask_target)
             S.summary.append(msg)
         elif mode in ("beta", "manual"):
-            msg, _ = build_and_flash(mode, False, ask_port)
+            msg, _ = build_and_flash(mode, False, ask_port, ask_target)
             S.summary.append(msg)
         prog(100, "Done")
     except Cancelled:
@@ -732,7 +799,10 @@ def main():
             do_fl = False
         start.state(["disabled"])
         combo.state(["disabled"])
-        threading.Thread(target=work, args=((drive, selected_mode, do_dl, do_fl, update_only, manual), ask_port), daemon=True).start()
+        threading.Thread(target=work, args=((drive, selected_mode, do_dl, do_fl, update_only, manual),
+                                            ask_port,
+                                            lambda sketches, default: ask_sketch(sketches, root, default)),
+                         daemon=True).start()
         poll()
 
     start.configure(command=go)
