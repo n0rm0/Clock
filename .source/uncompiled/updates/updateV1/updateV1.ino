@@ -55,7 +55,9 @@ void txt(const GFXfont* f, uint16_t col, uint8_t datum, const String& s, int x, 
 // ====================================================================
 //  touch (TFT_eSPI built-in XPT2046 support + 4-corner calibration)
 // ====================================================================
-uint16_t calData[5];
+uint16_t calData[5] = {
+  TOUCH_CAL_X0, TOUCH_CAL_X1, TOUCH_CAL_Y0, TOUCH_CAL_Y1, TOUCH_CAL_ROTATION
+};
 
 bool loadCal() {
   if (!sdOk) return false;
@@ -76,11 +78,8 @@ void saveCal() {
 }
 
 void ensureCalibration() {
-  if (!loadCal()) {
-    tft.fillScreen(TFT_BLACK);
-    tft.calibrateTouch(calData, TFT_MAGENTA, TFT_BLACK, 15);   // touch the 4 corner arrows
-    saveCal();
-  }
+  // Use the official TFT_eSPI calibration measured for rotation 3. Do not
+  // launch the calibration screen or replace these values from the SD card.
   tft.setTouch(calData);
 }
 

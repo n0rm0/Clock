@@ -103,6 +103,7 @@ This checklist reflects the requirements in [`agent.md`](agent.md) and the files
 - [x] Fix the clock sketch's Arduino `Key` prototype and PNGdec callback compile errors shown by the Windows build.
 - [x] Set the clock display rotation to 180 degrees (`TFT_ROTATION 3`).
 - [x] Add a standalone raw-touch coordinate sketch; final touch mapping remains pending the user's Serial Monitor readings.
+- [x] Hardwire official TFT_eSPI touch calibration `{410, 3427, 282, 2968, 7}` for the 180-degree display orientation.
 - [x] Remove the generated `extras` folder from source arrangement.
 - [x] Place installed raw update sketches under the SD card `.source/uncompiled/updates/` tree.
 - [x] Make the `.bat` launch Python with `pythonw` and a hidden bootstrap process instead of a visible terminal.

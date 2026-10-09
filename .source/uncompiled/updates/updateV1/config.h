@@ -11,6 +11,13 @@
 #define TFT_H 320
 #define TFT_ROTATION 3          // landscape, rotated 180 degrees from the previous orientation
 
+// Official TFT_eSPI calibration output for rotation 3.
+#define TOUCH_CAL_X0 410
+#define TOUCH_CAL_X1 3427
+#define TOUCH_CAL_Y0 282
+#define TOUCH_CAL_Y1 2968
+#define TOUCH_CAL_ROTATION 7
+
 // ---------- SD card (own SPI bus, default SPI) ----------
 #define SD_PIN_CS   5
 #define SD_PIN_SCK  18
