@@ -87,7 +87,10 @@ void ensureCalibration() {
 bool readTouch(int &x, int &y) {
   static uint32_t last = 0;
   uint16_t tx, ty;
-  if (tft.getTouch(&tx, &ty) && millis() - last > 220) {
+  // TFT_eSPI documents Z=350 as the default pressure threshold. Passing it
+  // explicitly prevents the disconnected/idle XPT2046 readings from acting
+  // like touches (the test sketch previously exposed this as RAW_X=0).
+  if (tft.getTouch(&tx, &ty, 350) && millis() - last > 220) {
     last = millis(); x = tx; y = ty; return true;
   }
   return false;

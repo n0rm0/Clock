@@ -1,6 +1,6 @@
 // Clock touch test for the Hosyond 4-inch ESP32-32 display.
 //
-// Open Serial Monitor at 115200 baud, then touch each numbered target.
+// Open Serial Monitor at 115200 baud, then touch and release each numbered target.
 // Send the printed RAW values back so the clock touch mapping can be fixed.
 // This sketch is standalone and is not part of the normal Clock firmware build.
 //
@@ -8,6 +8,7 @@
 //   TFT_CS=15, TFT_DC=2, TFT_RST=-1/EN, TFT_SCLK=14,
 //   TFT_MOSI=13, TFT_MISO=12, TOUCH_CS=33, TOUCH_IRQ=36,
 // and use HSPI. The installer supplies these same values automatically.
+// TFT_eSPI's documented default pressure threshold is Z=350.
 
 #include <Arduino.h>
 #include <SPI.h>
@@ -22,15 +23,16 @@ struct Target {
 };
 
 const Target targets[] = {
-  {40, 40, "TOP-LEFT"},
-  {440, 40, "TOP-RIGHT"},
-  {440, 280, "BOTTOM-RIGHT"},
-  {40, 280, "BOTTOM-LEFT"},
+  {4, 4, "TOP-LEFT"},
+  {475, 4, "TOP-RIGHT"},
+  {475, 315, "BOTTOM-RIGHT"},
+  {4, 315, "BOTTOM-LEFT"},
   {240, 160, "CENTER"}
 };
 const size_t targetCount = sizeof(targets) / sizeof(targets[0]);
 size_t targetIndex = 0;
 uint32_t lastTouch = 0;
+bool wasPressed = false;
 
 void drawTarget() {
   tft.fillScreen(TFT_BLACK);
@@ -51,7 +53,8 @@ void setup() {
   Serial.println();
   Serial.println("CLOCK TOUCH TEST");
   Serial.println("Rotation: 3 (180 degrees)");
-  Serial.println("Touch each target and send all RAW lines back.");
+  Serial.println("Touch and release each target; send all RAW_X/RAW_Y/RAW_Z lines back.");
+  Serial.println("Screen limits at rotation 3 are X=0..479 and Y=0..319.");
 
   tft.init();
   tft.setRotation(3);
@@ -61,11 +64,20 @@ void setup() {
 void loop() {
   uint16_t rawX = 0;
   uint16_t rawY = 0;
-  if (tft.getTouchRaw(&rawX, &rawY) && millis() - lastTouch > 500) {
+  uint16_t rawZ = tft.getTouchRawZ();
+  bool pressed = rawZ > 350;
+  if (!pressed) {
+    wasPressed = false;
+    delay(10);
+    return;
+  }
+  if (!wasPressed && millis() - lastTouch > 500) {
+    tft.getTouchRaw(&rawX, &rawY);
     lastTouch = millis();
-    Serial.printf("TARGET %u %s: RAW_X=%u RAW_Y=%u SCREEN_X=%d SCREEN_Y=%d\n",
+    wasPressed = true;
+    Serial.printf("TARGET %u %s: RAW_X=%u RAW_Y=%u RAW_Z=%u SCREEN_X=%d SCREEN_Y=%d\n",
                   (unsigned)(targetIndex + 1), targets[targetIndex].name,
-                  rawX, rawY, targets[targetIndex].x, targets[targetIndex].y);
+                  rawX, rawY, rawZ, targets[targetIndex].x, targets[targetIndex].y);
     tft.fillCircle(targets[targetIndex].x, targets[targetIndex].y, 8, TFT_GREEN);
     targetIndex = (targetIndex + 1) % targetCount;
     delay(250);
