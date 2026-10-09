@@ -9,7 +9,7 @@
 // ====================================================================
 #define TFT_W 480
 #define TFT_H 320
-#define TFT_ROTATION 1          // landscape
+#define TFT_ROTATION 3          // landscape, rotated 180 degrees from the previous orientation
 
 // ---------- SD card (own SPI bus, default SPI) ----------
 #define SD_PIN_CS   5

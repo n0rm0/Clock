@@ -12,6 +12,8 @@ Raw source and compiled firmware use matching versioned paths. Each Arduino sket
 │   ├── bootloader/fallback/bootloaderV1/
 │   └── updates/updateV1/
 ├── install/                  # GitHub-downloaded launcher and installer
+├── touch_test/               # standalone raw-touch coordinate sketch
+│   └── touch_test.ino
 └── uncompiled/               # raw files for download and editing
     ├── bootloader/fallback/bootloaderV1/
     │   └── bootloaderV1.ino
@@ -28,3 +30,5 @@ When flashing a compiled sketch, the installer shows a visible **Flash device** 
 Raw sketches installed to an SD card are placed under `.source/uncompiled/updates/<version>/` or `.source/uncompiled/bootloader/fallback/<version>/`; no root-level `updateV1` folder or `extras` folder is created.
 
 The compiled tree must contain only real `.bin` files. No compiled binaries were included yet, so its empty directories are created when the installer prepares the SD card. See [.agent/todo.md](.agent/todo.md) for validation items.
+
+The display is now set to rotation `3` (180°). To collect touch coordinates, open [.source/touch_test/touch_test.ino](.source/touch_test/touch_test.ino), configure TFT_eSPI with the pin settings in its comments, upload it, and open Serial Monitor at **115200 baud**. Touch each on-screen target in order and send back every `RAW_X`/`RAW_Y` line. Those measurements will be used to hardwire the final touch mapping in the clock firmware.
