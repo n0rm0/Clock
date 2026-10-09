@@ -38,13 +38,16 @@
 #define TIME_TZ "EST5EDT,M3.2.0,M11.1.0"   // US Eastern
 #define NTP_SERVER "pool.ntp.org"
 
-// ---------- Saved on the SD card by the setup screens ----------
-#define DATA_DIR      "/.source/data"
-#define WIFI_FILE     "/.source/data/wifi.txt"
-#define TOUCH_FILE    "/.source/data/touch.txt"      // touch calibration (5 numbers)
-#define HISTORY_FILE  "/.source/data/history.txt"    // every update installed
-#define ALARM_FILE    "/.source/data/alarm.txt"      // enabled,time,date,repeat mask
-#define SETTINGS_FILE "/.source/data/settings.txt"   // app preferences
+// ---------- SD-only preferences ----------
+// If the SD card is absent, these files are never read or written and all
+// preferences remain temporary for the current power session.
+#define DATA_DIR           "/data"
+#define PREFERENCES_DIR    "/data/preferences"
+#define WIFI_FILE          "/data/preferences/wifi.json"
+#define TOUCH_FILE         "/data/preferences/touch.json"
+#define HISTORY_FILE       "/data/preferences/history.json"
+#define ALARM_FILE         "/data/preferences/alarm.json"
+#define SETTINGS_FILE      "/data/preferences/settings.json"
 #define CLASSROOM_CACHE_FILE "/.source/data/secrets/classroom_cache.json"
 
 // ---------- Weather (placeholder values on screen for now) ----------

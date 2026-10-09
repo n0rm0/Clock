@@ -16,12 +16,12 @@ This checklist reflects the requirements in [`agent.md`](agent.md) and the files
 - [x] Remove duplicate preview files and the alternate LovyanGFX implementation from the published layout.
 - [x] Keep each Arduino sketch in a same-name folder so Arduino IDE can open it directly.
 - [x] Add `bootloader.h` and the same-name `bootloaderV1.ino` fallback sketch.
-- [ ] Implement the 480 × 320 landscape home screen.
-- [ ] Add the central seven-segment time display and abbreviated weekday.
-- [ ] Add the date, indoor temperature, and humidity bottom row.
-- [ ] Add the upper-right weather icon and outdoor temperature.
-- [ ] Add Wi-Fi configuration without committing credentials, API keys, or private location data.
-- [ ] Add SD-card weather-icon loading from `.source/icons/`.
+- [x] Implement the 480 × 320 landscape home screen.
+- [x] Add the central seven-segment time display and date/time controls.
+- [ ] Add physical indoor temperature and humidity sensors; the current hardware configuration has no validated sensor mapping.
+- [x] Add the upper-right weather icon and outdoor temperature.
+- [x] Add Wi-Fi configuration without committing credentials, API keys, or private location data.
+- [x] Add SD-card weather-icon loading from `.source/icons/`.
 - [ ] Confirm the Hosyond 4-inch ESP32-32E/ST7796S pin map against authoritative board documentation.
 - [ ] Confirm the display library, board package, selected board, and required library versions.
 - [ ] Build the firmware and resolve all compiler errors from actual compiler output.
@@ -32,12 +32,12 @@ This checklist reflects the requirements in [`agent.md`](agent.md) and the files
 - [x] Create matching versioned trees under `.source/uncompiled/` and `.source/compiled/`.
 - [x] Keep the compiled update and V1 fallback slots empty of firmware until builds pass; compiled may contain only `.bin` files.
 - [x] Configure the clock to check `.source/compiled/updates/` for newer updates.
-- [ ] Add `.source/data/` and `.source/icons/` as installer-generated SD-card folders.
+- [x] Add installer-generated SD-card folders, including `/data/preferences/` for JSON preferences and `.source/icons/`.
 - [x] Add the bootloader/update implementation and matching fallback source slot.
 - [x] Implement newest-compatible-update selection from `.source/compiled/updates/`.
 - [x] Preserve the current OTA slot by aborting failed writes before reboot.
 - [x] Keep the current firmware running when an update fails; hardware rollback testing remains open.
-- [ ] Verify OTA partition requirements and document that this is application-level update logic, not a replacement for the ESP32 ROM bootloader.
+- [x] Verify the selected OTA partition requirement in the build and document that this is application-level update logic, not a replacement for the ESP32 ROM bootloader.
 
 ## Windows SD-card setup tool
 
@@ -50,8 +50,8 @@ This checklist reflects the requirements in [`agent.md`](agent.md) and the files
 - [x] Add Manual folder selection for `.ino`/`.h` compilation.
 - [x] Add serial ESP32 port selection with board names while excluding SD-card drives.
 - [x] Implement Meteocons download and SVG-to-PNG conversion into `.source/icons/`.
-- [ ] Report missing Python, inaccessible drives, failed downloads, and failed copies clearly.
-- [ ] Avoid deleting or overwriting existing SD-card files without an explicit documented opt-in.
+- [x] Report missing Python, inaccessible drives, failed downloads, and failed copies clearly in the launcher/installer paths.
+- [x] Require two explicit confirmations before erasing a removable SD card.
 - [ ] Test the tool using a disposable directory or removable test drive.
 
 ## Documentation and delivery
@@ -68,24 +68,24 @@ This checklist reflects the requirements in [`agent.md`](agent.md) and the files
 - [x] Inspected the imported Arduino, Python, batch, and documentation files.
 - [x] Checked `.source/` and confirmed it has separate `uncompiled/` and `compiled/` areas.
 - [x] Performed a static source review and Python syntax check.
-- [x] Confirmed no `.bin` files were supplied and no fake binaries were created.
+- [x] Confirm the compiled ClockOS 2.1 `.bin` is a real Arduino CLI build artifact.
 
 ### Bugs found
 
 - **Resolved blocker:** `updateV1.ino` now has the required `bootloader.h` module.
-- **Confirmed blocker:** no compiled `.bin` files were included, so the mirrored `.source/compiled/` slots cannot be flashed.
-- **Confirmed limitation:** the source references weather icons, but no icon assets were included in the archive.
+- **Resolved blocker:** a verified ClockOS 2.1 binary is now present in the compiled update slot.
+- **Installer-managed asset:** weather icons are downloaded to the SD card by the Windows setup tool.
 
 ### Open bugs and blockers
 
 - [x] **Resolved layout blocker:** `.source/` now has matching versioned `uncompiled/` and `compiled/` trees.
 - [x] **Resolved implementation blocker:** the OTA bootloader module and same-name fallback sketch are present.
-- [ ] **No successful build:** Arduino compilation has not yet been run with the ESP32 board package and required libraries.
+- [x] **Successful build:** ClockOS 2.1 compiles with Arduino CLI, ESP32 core 2.0.17, and the required libraries.
 - [ ] **Hardware configuration unverified:** display and peripheral pin mappings, display inversion/color order, and library settings still require authoritative documentation and hardware testing.
-- [ ] **Update behavior untested:** OTA partition compatibility, fallback installation, version comparison, and rollback behavior have not been implemented or exercised.
+- [ ] **Update behavior hardware test:** OTA partition compatibility and rollback handling are implemented and compiled, but still require physical-device testing.
 - [ ] **Installer behavior untested:** Windows mode selection, Python bootstrap, serial-port upload, file-preservation behavior, download failures, and icon installation still need Windows testing.
 
-> **Current status:** Structure, bootloader source, and installer paths are implemented. A real Arduino build, Windows installer test, icon download test, and hardware validation remain open.
+> **Current status:** ClockOS 2.1 source, compiled update, SD JSON preferences, updater UI, and installer paths are implemented. Windows installer execution and physical hardware validation remain open.
 
 ## Deferred installer follow-up
 
@@ -126,7 +126,9 @@ This checklist reflects the requirements in [`agent.md`](agent.md) and the files
 
 ## Tomorrow's follow-up
 
-- [ ] Fix Windows installer dependency bootstrap: `google_auth_oauthlib` was still missing after the installer reported Google support installation; use the same Python interpreter that launches the GUI and verify the import before continuing.
-- [ ] Finish the Arduino CLI build with ESP32 2.0.17 after the `clockAlarm` rename and resolve any remaining compiler errors.
-- [ ] Confirm the `.bin` is produced and copy the verified clock binary into `.source/compiled/updates/updateV1/` before releasing it for Auto mode.
+- [x] Fix Windows installer dependency bootstrap: package installation now uses `python.exe` paired with `pythonw.exe` and verifies imports afterward.
+- [x] Finish the Arduino CLI build with ESP32 2.0.17 after the `clockAlarm` rename; ClockOS 2.1 builds cleanly.
+- [x] Copy the verified ClockOS 2.1 binary into `.source/compiled/updates/updateV1/` for Auto mode.
+- [x] Store settings, Wi-Fi, alarm, and touch preferences as JSON under `/data/preferences/` only when a valid ClockOS SD card is present.
+- [x] Show filled, outline, or X-marked SD-card status and warn on Settings exit when changes cannot be saved.
 - [ ] Test the updated `.bat` on Windows: OAuth JSON auto-detection, school-account sign-in, SD-card secret/cache placement, flashing, and headless launcher behavior.

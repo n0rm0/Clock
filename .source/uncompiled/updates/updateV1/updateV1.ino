@@ -36,13 +36,20 @@ TFT_eSprite spr = TFT_eSprite(&tft);
 #define C(r,g,b) tft.color565(r,g,b)
 uint16_t UI_BLUE, UI_BACK, UI_TEXT, UI_KEY, UI_LIP, UI_RED, UI_YEL, UI_GREEN;
 
-enum Screen { S_WELCOME, S_SCAN, S_KEYS, S_HOME, S_ALARM, S_CLOCK, S_SETTINGS, S_WIFI, S_WEATHER, S_CALENDAR };
+enum Screen { S_WELCOME, S_SCAN, S_KEYS, S_HOME, S_ALARM, S_CLOCK, S_SETTINGS, S_WIFI, S_WEATHER, S_CALENDAR, S_UPDATE, S_SDCARD, S_SDFILES };
 Screen screen = S_WELCOME;
+
+// ClockOS release identity. The sketch folder remains updateV1 for installer
+// compatibility, while the firmware/update feed is now ClockOS 2.1.
+static const char* CLOCKOS_NAME = "ClockOS";
+static const char* CLOCKOS_VERSION = "2.1";
 
 String selSsid, password, errMsg;
 String ssids[5]; int rssis[5]; int nNets = 0;
 bool showPass = false; uint8_t layer = 0;
-bool sdOk = false;
+bool sdOk = false;       // valid ClockOS-formatted SD card
+bool sdPresent = false;  // SD hardware/card responds, but may be unformatted
+String sdCardMessage = "";
 bool screenSleeping = false;
 bool factoryResetArmed = false;
 uint32_t lastActivity = 0;
@@ -72,17 +79,22 @@ bool loadCal() {
   if (!sdOk) return false;
   File f = SD.open(TOUCH_FILE);
   if (!f) return false;
-  for (int i = 0; i < 5; i++) calData[i] = (uint16_t)f.readStringUntil('\n').toInt();
+  DynamicJsonDocument doc(512);
+  if (deserializeJson(doc, f) != DeserializationError::Ok) { f.close(); return false; }
+  for (int i = 0; i < 5; i++) calData[i] = doc["cal"][i] | calData[i];
   f.close();
   return calData[0] || calData[1] || calData[2] || calData[3];
 }
 
 void saveCal() {
   if (!sdOk) return;
-  SD.mkdir("/.source"); SD.mkdir(DATA_DIR); SD.remove(TOUCH_FILE);
+  SD.mkdir(DATA_DIR); SD.mkdir(PREFERENCES_DIR); SD.remove(TOUCH_FILE);
   File f = SD.open(TOUCH_FILE, FILE_WRITE);
   if (!f) return;
-  for (int i = 0; i < 5; i++) f.println(calData[i]);
+  DynamicJsonDocument doc(512);
+  JsonArray values = doc.createNestedArray("cal");
+  for (int i = 0; i < 5; i++) values.add(calData[i]);
+  serializeJson(doc, f);
   f.close();
 }
 
@@ -401,29 +413,37 @@ int readBatteryPct() {
 // ====================================================================
 void saveCreds() {
   if (!sdOk) return;
-  SD.mkdir("/.source"); SD.mkdir(DATA_DIR);
+  SD.mkdir(DATA_DIR); SD.mkdir(PREFERENCES_DIR);
   SD.remove(WIFI_FILE);
   File f = SD.open(WIFI_FILE, FILE_WRITE);
   if (!f) return;
-  f.println(selSsid); f.println(password); f.close();
+  DynamicJsonDocument doc(768);
+  doc["ssid"] = selSsid; doc["password"] = password;
+  serializeJson(doc, f); f.close();
 }
 
 bool loadCreds() {
+  if (!sdOk) return false;
   File f = SD.open(WIFI_FILE);
   if (!f) return false;
-  selSsid = f.readStringUntil('\n'); selSsid.trim();
-  password = f.readStringUntil('\n'); password.trim();
+  DynamicJsonDocument doc(768);
+  if (deserializeJson(doc, f) != DeserializationError::Ok) { f.close(); return false; }
+  selSsid = (const char*)(doc["ssid"] | "");
+  password = (const char*)(doc["password"] | "");
   f.close();
   return selSsid.length() > 0;
 }
 
 void saveAlarm() {
   if (!sdOk) return;
-  SD.mkdir("/.source"); SD.mkdir(DATA_DIR); SD.remove(ALARM_FILE);
+  SD.mkdir(DATA_DIR); SD.mkdir(PREFERENCES_DIR); SD.remove(ALARM_FILE);
   File f = SD.open(ALARM_FILE, FILE_WRITE);
   if (!f) return;
-  f.println(clockAlarm.enabled ? 1 : 0); f.println(clockAlarm.hour); f.println(clockAlarm.minute);
-  f.println(clockAlarm.year); f.println(clockAlarm.month); f.println(clockAlarm.day); f.println(clockAlarm.repeatMask);
+  DynamicJsonDocument doc(768);
+  doc["enabled"] = clockAlarm.enabled; doc["hour"] = clockAlarm.hour; doc["minute"] = clockAlarm.minute;
+  doc["year"] = clockAlarm.year; doc["month"] = clockAlarm.month; doc["day"] = clockAlarm.day;
+  doc["repeatMask"] = clockAlarm.repeatMask;
+  serializeJson(doc, f);
   f.close();
 }
 
@@ -431,30 +451,30 @@ bool loadAlarm() {
   if (!sdOk) return false;
   File f = SD.open(ALARM_FILE);
   if (!f) return false;
-  clockAlarm.enabled = f.readStringUntil('\n').toInt() != 0;
-  clockAlarm.hour = constrain(f.readStringUntil('\n').toInt(), 0, 23);
-  clockAlarm.minute = constrain(f.readStringUntil('\n').toInt(), 0, 59);
-  clockAlarm.year = constrain(f.readStringUntil('\n').toInt(), 2024, 2099);
-  clockAlarm.month = constrain(f.readStringUntil('\n').toInt(), 1, 12);
-  clockAlarm.day = constrain(f.readStringUntil('\n').toInt(), 1, 31);
-  clockAlarm.repeatMask = f.readStringUntil('\n').toInt() & 0x7F;
+  DynamicJsonDocument doc(768);
+  if (deserializeJson(doc, f) != DeserializationError::Ok) { f.close(); return false; }
+  clockAlarm.enabled = doc["enabled"] | false;
+  clockAlarm.hour = constrain((int)(doc["hour"] | 7), 0, 23);
+  clockAlarm.minute = constrain((int)(doc["minute"] | 0), 0, 59);
+  clockAlarm.year = constrain((int)(doc["year"] | 2026), 2024, 2099);
+  clockAlarm.month = constrain((int)(doc["month"] | 1), 1, 12);
+  clockAlarm.day = constrain((int)(doc["day"] | 1), 1, 31);
+  clockAlarm.repeatMask = (doc["repeatMask"] | 0) & 0x7F;
   f.close();
   return true;
 }
 
 void saveSettings() {
   if (!sdOk) return;
-  SD.mkdir("/.source"); SD.mkdir(DATA_DIR); SD.remove(SETTINGS_FILE);
+  SD.mkdir(DATA_DIR); SD.mkdir(PREFERENCES_DIR); SD.remove(SETTINGS_FILE);
   File f = SD.open(SETTINGS_FILE, FILE_WRITE);
   if (!f) return;
-  f.println(settings.offline ? 1 : 0);
-  f.println(settings.use24Hour ? 1 : 0);
-  f.println(settings.showBatteryPercent ? 1 : 0);
-  f.println(settings.notifications ? 1 : 0);
-  f.println(settings.calendarEnabled ? 1 : 0);
-  f.println(settings.manualWeather ? 1 : 0);
-  f.println(manualCity);
-  f.println(manualLat, 6); f.println(manualLon, 6);
+  DynamicJsonDocument doc(1024);
+  doc["offline"] = settings.offline; doc["use24Hour"] = settings.use24Hour;
+  doc["showBatteryPercent"] = settings.showBatteryPercent; doc["notifications"] = settings.notifications;
+  doc["calendarEnabled"] = settings.calendarEnabled; doc["manualWeather"] = settings.manualWeather;
+  doc["manualCity"] = manualCity; doc["manualLat"] = manualLat; doc["manualLon"] = manualLon;
+  serializeJson(doc, f);
   f.close();
 }
 
@@ -462,18 +482,18 @@ void loadSettings() {
   if (!sdOk) return;
   File f = SD.open(SETTINGS_FILE);
   if (!f) return;
-  settings.offline = f.readStringUntil('\n').toInt() != 0;
-  settings.use24Hour = f.readStringUntil('\n').toInt() != 0;
-  settings.showBatteryPercent = f.readStringUntil('\n').toInt() != 0;
-  settings.notifications = f.readStringUntil('\n').toInt() != 0;
-  settings.calendarEnabled = f.readStringUntil('\n').toInt() != 0;
-  settings.manualWeather = f.readStringUntil('\n').toInt() != 0;
-  String savedCity = f.readStringUntil('\n'); savedCity.trim();
+  DynamicJsonDocument doc(1024);
+  if (deserializeJson(doc, f) != DeserializationError::Ok) { f.close(); return; }
+  settings.offline = doc["offline"] | false;
+  settings.use24Hour = doc["use24Hour"] | false;
+  settings.showBatteryPercent = doc["showBatteryPercent"] | true;
+  settings.notifications = doc["notifications"] | true;
+  settings.calendarEnabled = doc["calendarEnabled"] | true;
+  settings.manualWeather = doc["manualWeather"] | false;
+  String savedCity = (const char*)(doc["manualCity"] | "");
   if (savedCity.length()) manualCity = savedCity;
-  String savedLat = f.readStringUntil('\n'); savedLat.trim();
-  String savedLon = f.readStringUntil('\n'); savedLon.trim();
-  if (savedLat.length()) manualLat = savedLat.toDouble();
-  if (savedLon.length()) manualLon = savedLon.toDouble();
+  manualLat = doc["manualLat"] | manualLat;
+  manualLon = doc["manualLon"] | manualLon;
   f.close();
 }
 
@@ -736,6 +756,8 @@ void drawTimeBlock() {
   }
 }
 
+void drawSdCardIcon(int cx, int cy, bool inserted, bool invalid);
+
 void drawSettingsGear(int cx, int cy, uint16_t color) {
   tft.drawCircle(cx, cy, 9, color); tft.drawCircle(cx, cy, 3, color);
   for (int i = 0; i < 8; i++) {
@@ -749,6 +771,7 @@ void drawStatusBlock() {
   tft.fillRect(0, 226, 240, 94, 0x0000);
   int lvl = (WiFi.status() == WL_CONNECTED) ? rssiLevel(WiFi.RSSI()) : 0;
   drawWifiSignal(28, 307, lvl, 0x0000, COL_WHITE, 0x39E7);
+  drawSdCardIcon(104, 307, sdOk, sdPresent && !sdOk);
   int pct = readBatteryPct();
   drawBattery(170, 298, pct, 0x0000, COL_WHITE);
   if (settings.showBatteryPercent) {
@@ -756,6 +779,24 @@ void drawStatusBlock() {
     txt(F12, COL_DIM, ML_DATUM, b, 218, 301);
   }
   drawSettingsGear(229, 307, COL_DIM);
+}
+
+void refreshSdState() {
+  static uint32_t lastCheck = 0;
+  static bool previousOk = false, previousPresent = false;
+  if (millis() - lastCheck < 3000) return;
+  lastCheck = millis();
+  bool present = SD.begin(SD_PIN_CS);
+  bool valid = present && SD.exists("/.source") && SD.exists(PREFERENCES_DIR);
+  bool changed = present != previousPresent || valid != previousOk;
+  sdPresent = present; sdOk = valid;
+  previousPresent = present; previousOk = valid;
+  if (changed && !screenSleeping) {
+    if (screen == S_HOME) drawStatusBlock();
+    else if (screen == S_SETTINGS) showSettingsPage();
+    else if (screen == S_WIFI) showWifiPage();
+    else if (screen == S_WEATHER) showWeatherPage();
+  }
 }
 
 void drawRightPanel() {
@@ -917,10 +958,97 @@ void dismissAlarm() {
   showHome();
 }
 
+void drawSdCardIcon(int cx, int cy, bool inserted, bool invalid = false) {
+  uint16_t blue = C(0, 122, 255);
+  uint16_t fill = inserted ? blue : UI_BACK;
+  tft.fillRoundRect(cx - 13, cy - 10, 26, 20, 3, fill);
+  tft.drawRoundRect(cx - 13, cy - 10, 26, 20, 3, blue);
+  for (int i = 0; i < 3; i++) tft.drawFastVLine(cx - 7 + i * 5, cy - 7, 5, inserted ? 0xFFFF : blue);
+  tft.drawFastHLine(cx - 8, cy + 6, 16, inserted ? 0xFFFF : blue);
+  if (invalid) {
+    tft.drawLine(cx - 8, cy - 6, cx + 8, cy + 6, UI_RED);
+    tft.drawLine(cx + 8, cy - 6, cx - 8, cy + 6, UI_RED);
+  }
+}
+
+void showSdSaveWarning() {
+  tft.fillRoundRect(34, 236, 412, 60, 14, C(255, 244, 224));
+  drawSdCardIcon(64, 266, false, sdPresent);
+  txt(F12B, C(130, 80, 10), ML_DATUM, sdPresent ? "SD card is not ClockOS-ready" : "SD card not inserted", 94, 254);
+  txt(F12, C(130, 80, 10), ML_DATUM, "Changes will not be saved", 94, 276);
+  delay(1600);
+}
+
+void leaveSettingsPage() {
+  if (!sdOk) showSdSaveWarning();
+  showHome();
+}
+
+bool prepareSdCard() {
+  if (!sdPresent && !SD.begin(SD_PIN_CS)) {
+    sdCardMessage = "No SD card detected.";
+    return false;
+  }
+  sdPresent = true;
+  // Prepare the ClockOS layout without erasing unrelated user files.
+  bool ok = SD.mkdir("/.source") || SD.exists("/.source");
+  ok = (SD.mkdir(DATA_DIR) || SD.exists(DATA_DIR)) && ok;
+  ok = (SD.mkdir(PREFERENCES_DIR) || SD.exists(PREFERENCES_DIR)) && ok;
+  ok = (SD.mkdir("/.source/data/secrets") || SD.exists("/.source/data/secrets")) && ok;
+  ok = (SD.mkdir("/.source/icons") || SD.exists("/.source/icons")) && ok;
+  ok = (SD.mkdir("/.source/compiled") || SD.exists("/.source/compiled")) && ok;
+  ok = (SD.mkdir("/.source/compiled/updates") || SD.exists("/.source/compiled/updates")) && ok;
+  if (!ok) { sdOk = false; sdCardMessage = "Could not prepare this SD card."; return false; }
+  sdOk = true;
+  saveSettings(); saveAlarm(); saveCreds(); saveCal();
+  sdCardMessage = "ClockOS storage is ready. Current settings saved.";
+  return true;
+}
+
+void showSdCardPage() {
+  screen = S_SDCARD; drawBackHeader("SD Card");
+  drawSdCardIcon(240, 78, sdOk, sdPresent && !sdOk);
+  txt(F18B, 0x0000, TC_DATUM, sdOk ? "ClockOS card ready" : (sdPresent ? "Card needs setup" : "No card detected"), 240, 124);
+  if (sdPresent) {
+    uint64_t total = SD.cardSize() / (1024ULL * 1024ULL);
+    uint64_t used = SD.usedBytes() / (1024ULL * 1024ULL);
+    char storage[64]; snprintf(storage, sizeof(storage), "Storage: %llu MB used of %llu MB", used, total);
+    txt(F12, 0x0000, TC_DATUM, storage, 240, 150);
+  }
+  alarmButton(20, 174, 215, "Format / prepare", true);
+  alarmButton(245, 174, 215, "View files");
+  txt(F12, 0x0000, TC_DATUM, "Creates folders and saves current settings", 240, 232);
+  txt(F12, 0x0000, TC_DATUM, "without deleting unrelated files.", 240, 252);
+  if (sdCardMessage.length()) txt(F12, sdOk ? UI_GREEN : UI_RED, TC_DATUM, sdCardMessage, 240, 286);
+}
+
+void showSdFilesPage() {
+  screen = S_SDFILES; drawBackHeader("SD Card Files");
+  if (!sdPresent) {
+    txt(F12B, UI_RED, TC_DATUM, "No SD card detected", 240, 96);
+    return;
+  }
+  txt(F12, 0x0000, TC_DATUM, "Read-only viewer", 240, 58);
+  File root = SD.open("/");
+  int row = 0;
+  while (root && row < 9) {
+    File entry = root.openNextFile();
+    if (!entry) break;
+    String name = String(entry.name());
+    if (name.length() > 30) name = name.substring(name.length() - 30);
+    String line = entry.isDirectory() ? "[DIR] " + name : name + "  " + String((unsigned long)entry.size()) + " B";
+    txt(F12, 0x0000, ML_DATUM, line, 24, 88 + row * 22);
+    entry.close(); row++;
+  }
+  if (root) root.close();
+  if (!row) txt(F12, 0x0000, TC_DATUM, "No readable files", 240, 110);
+}
+
 void drawBackHeader(const String& title) {
   tft.fillScreen(UI_BACK);
   alarmButton(8, 8, 78, "Back");
   txt(F18B, 0x0000, TC_DATUM, title, 240, 24);
+  drawSdCardIcon(438, 24, sdOk, sdPresent && !sdOk);
 }
 
 void showSettingsPage() {
@@ -939,9 +1067,44 @@ void showSettingsPage() {
   txt(F12, 0x0000, TC_DATUM, "Orientation: permanent 180 degrees", 240, 311);
 }
 
+void drawAppleUpdateIcon(int cx, int cy, uint16_t blue) {
+  tft.fillRoundRect(cx - 28, cy - 34, 56, 68, 12, blue);
+  tft.fillRoundRect(cx - 18, cy - 24, 36, 48, 7, 0xFFFF);
+  tft.fillRoundRect(cx - 10, cy - 6, 20, 12, 5, blue);
+  tft.fillCircle(cx, cy + 17, 2, blue);
+  tft.drawLine(cx + 8, cy - 30, cx + 18, cy - 40, blue);
+  tft.drawLine(cx + 18, cy - 40, cx + 24, cy - 34, blue);
+}
+
+void drawAppleButton(int x, int y, int w, int h, const String& label, bool primary = false) {
+  uint16_t blue = C(0, 122, 255);
+  tft.fillRoundRect(x, y, w, h, h / 2, primary ? blue : C(232, 237, 245));
+  txt(F12B, primary ? 0xFFFF : blue, MC_DATUM, label, x + w / 2, y + h / 2);
+}
+
+void drawUpdatePage(int pct, const String& status) {
+  screen = S_UPDATE;
+  uint16_t bg = C(242, 244, 248), card = 0xFFFF, blue = C(0, 122, 255);
+  tft.fillScreen(bg);
+  tft.fillRoundRect(34, 22, 412, 276, 22, card);
+  drawAppleUpdateIcon(240, 76, blue);
+  txt(F18B, C(20, 20, 24), TC_DATUM, "Software Update", 240, 128);
+  txt(F12, C(100, 105, 115), TC_DATUM, String(CLOCKOS_NAME) + " " + CLOCKOS_VERSION, 240, 153);
+  String line = status;
+  if (line.length() > 38) line = line.substring(0, 38);
+  txt(F12, C(75, 78, 88), TC_DATUM, line, 240, 181);
+  tft.fillRoundRect(78, 203, 324, 12, 6, C(220, 225, 234));
+  int fill = constrain(pct, 0, 100) * 320 / 100;
+  if (fill > 0) tft.fillRoundRect(80, 205, fill, 8, 4, blue);
+  char progress[8]; snprintf(progress, sizeof(progress), "%d%%", constrain(pct, 0, 100));
+  txt(F12B, C(50, 52, 60), TC_DATUM, progress, 240, 235);
+  txt(F12, C(115, 120, 130), TC_DATUM, "Updates keep your clock secure and current.", 240, 258);
+}
+
 void factoryResetClock() {
   if (sdOk) {
-    SD.remove(SETTINGS_FILE); SD.remove(ALARM_FILE); SD.remove(WIFI_FILE);
+    SD.remove(SETTINGS_FILE); SD.remove(ALARM_FILE); SD.remove(WIFI_FILE); SD.remove(TOUCH_FILE);
+    SD.rmdir(PREFERENCES_DIR);
     SD.remove(CLASSROOM_CACHE_FILE); SD.remove("/.source/data/secrets/classroom_token.json");
     SD.remove("/.source/data/secrets/classroom_client.json");
   }
@@ -1018,23 +1181,24 @@ void showHome() {
 
 // ---- GitHub update (fetches newest .bin from .source/compiled in the repo) ----
 void updateProgress(int pct) {
-  animateLoader(240, 130);
   static int last = -1;
-  if (pct != last) {
-    last = pct;
-    tft.fillRect(180, 186, 120, 26, UI_BLUE);
-    char b[8]; snprintf(b, sizeof(b), "%d%%", pct);
-    txt(F12B, UI_TEXT, TC_DATUM, b, 240, 188);
-  }
+  if (pct != last) { last = pct; drawUpdatePage(pct, "Downloading and installing..."); }
 }
 
 void runUpdate() {
   if (WiFi.status() != WL_CONNECTED) return;
-  loaderScreen("checking for updates");
-  animateLoader(240, 130);
+  drawUpdatePage(0, "Checking for updates...");
   BL::Result r = BL::checkAndInstall(updateProgress);
-  if (r == BL::INSTALLED) { loaderScreen("update installed"); delay(800); ESP.restart(); }
-  // UP_TO_DATE or FAILED: keep running the current software
+  if (r == BL::INSTALLED) {
+    drawUpdatePage(100, "Update installed. Restarting...");
+    delay(1200); ESP.restart();
+  } else if (r == BL::UP_TO_DATE) {
+    drawUpdatePage(100, "Your ClockOS is up to date.");
+    delay(900);
+  } else {
+    drawUpdatePage(0, "Could not check right now. Try again later.");
+    delay(900);
+  }
 }
 
 // ====================================================================
@@ -1052,8 +1216,10 @@ void setup() {
   spr.setColorDepth(16); spr.createSprite(100, 100);
 
   SPI.begin(SD_PIN_SCK, SD_PIN_MISO, SD_PIN_MOSI, SD_PIN_CS);   // SD on the default (VSPI) bus; TFT uses HSPI
-  sdOk = SD.begin(SD_PIN_CS);
-  if (!sdOk) Serial.println("SD not found");
+  sdPresent = SD.begin(SD_PIN_CS);
+  sdOk = sdPresent && SD.exists("/.source") && SD.exists(PREFERENCES_DIR);
+  if (!sdPresent) Serial.println("SD not found");
+  else if (!sdOk) Serial.println("SD present but not formatted for ClockOS");
 
   ensureCalibration();
   loadSettings();
@@ -1077,6 +1243,8 @@ void loop() {
   int x, y;
   static uint32_t lastTick = 0;
   static int lastMin = -1;
+
+  refreshSdState();
 
   if (screenSleeping) {
     if (readTouch(x, y)) wakeDisplay();
@@ -1190,7 +1358,8 @@ void loop() {
     }
   } else if (screen == S_SETTINGS) {
     if (!readTouch(x, y)) return;
-    if (x < 100 && y < 45) { showHome(); return; }
+    if (x < 100 && y < 45) { leaveSettingsPage(); return; }
+    if (x >= 400 && y < 50) { showSdCardPage(); return; }
     if (y >= 50 && y < 84 && x < 240) settings.offline = !settings.offline;
     else if (y >= 50 && y < 84 && x >= 240) settings.use24Hour = !settings.use24Hour;
     else if (y >= 92 && y < 126 && x < 240) settings.showBatteryPercent = !settings.showBatteryPercent;
@@ -1206,6 +1375,13 @@ void loop() {
       factoryResetArmed = true; showSettingsPage(); return;
     }
     saveSettings(); showSettingsPage();
+  } else if (screen == S_SDCARD) {
+    if (!readTouch(x, y)) return;
+    if (x < 100 && y < 45) { showSettingsPage(); return; }
+    if (y >= 174 && y < 214 && x < 240) { prepareSdCard(); showSdCardPage(); return; }
+    if (y >= 174 && y < 214 && x >= 240) { showSdFilesPage(); return; }
+  } else if (screen == S_SDFILES) {
+    if (readTouch(x, y) && x < 100 && y < 45) showSdCardPage();
   } else if (screen == S_WIFI) {
     if (!readTouch(x, y)) return;
     if (x < 100 && y < 45) { showHome(); return; }

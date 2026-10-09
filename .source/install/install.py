@@ -20,6 +20,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog, filedialog
 
 OWNER, REPO, BRANCH = "n0rm0", "Clock", "main"
+PRODUCT_NAME, PRODUCT_VERSION = "ClockOS", "2.1"
 SOURCE_ROOT = ".source/uncompiled/updates"
 UA = {"User-Agent": "clock-installer"}
 ICON_BASE = "https://raw.githubusercontent.com/basmilius/weather-icons/dev/production/fill"
@@ -39,7 +40,10 @@ ESP_INDEX = "https://espressif.github.io/arduino-esp32/package_esp32_index.json"
 LIBS = ["TFT_eSPI", "PNGdec", "ArduinoJson"]
 CLASSROOM_SCOPES = [
     "https://www.googleapis.com/auth/classroom.courses.readonly",
-    "https://www.googleapis.com/auth/classroom.coursework.me.readonly",
+    # Classroom exposes coursework.me as a non-readonly scope; the API calls
+    # below remain read-only, but the invalid *.me.readonly variant is rejected
+    # by Google Auth Platform.
+    "https://www.googleapis.com/auth/classroom.coursework.me",
     "https://www.googleapis.com/auth/classroom.courseworkmaterials.readonly",
     "https://www.googleapis.com/auth/classroom.student-submissions.me.readonly",
     "https://www.googleapis.com/auth/classroom.announcements.readonly",
@@ -57,6 +61,22 @@ TFT_FLAGS = " ".join([
 ])
 FLASH_SKETCH = "updateV1"     # flashed over USB; it updates itself from GitHub afterwards
 NO_WINDOW = 0x08000000 if os.name == "nt" else 0
+
+
+def python_executable():
+    """Return python.exe even when the GUI was launched through pythonw.exe/pyw.exe."""
+    exe = sys.executable
+    if os.name == "nt" and os.path.basename(exe).lower() in ("pythonw.exe", "pyw.exe"):
+        candidate = os.path.join(os.path.dirname(exe), "python.exe")
+        if os.path.isfile(candidate):
+            return candidate
+    return exe
+
+
+def install_python_packages(packages, lo, hi, label):
+    """Install packages into the same user Python environment used by the GUI."""
+    run_cli(python_executable(), ["-m", "pip", "install", "--user"] + list(packages),
+            lo, hi, label)
 
 
 class Cancelled(Exception):
@@ -406,7 +426,7 @@ def wipe(root):
 
 def structure(drive):
     for d in ("compiled/updates/updateV1", "compiled/bootloader/fallback/bootloaderV1",
-              "uncompiled/updates", "uncompiled/bootloader/fallback", "data", "icons"):
+              "uncompiled/updates", "uncompiled/bootloader/fallback", "data", "data/preferences", "icons"):
         os.makedirs(os.path.join(drive, ".source", d), exist_ok=True)
     if os.name == "nt":
         os.system('attrib +h "%s"' % os.path.join(drive, ".source"))
@@ -416,9 +436,11 @@ def icons(drive, lo, hi):
     try:
         import fitz
     except ImportError:
-        subprocess.run([sys.executable, "-m", "pip", "install", "pymupdf"],
-                       capture_output=True, creationflags=NO_WINDOW)
-        import fitz
+        install_python_packages(["pymupdf"], lo, min(hi, lo + 3), "Installing weather-icon support")
+        try:
+            import fitz
+        except ImportError as exc:
+            raise RuntimeError("Weather icons need PyMuPDF, but it could not be imported after installation: %s" % exc)
     ok, bad = 0, []
     for i, name in enumerate(ICONS):
         prog(lo + int((hi - lo) * i / len(ICONS)), "Downloading icons... %d/%d" % (i + 1, len(ICONS)))
@@ -453,10 +475,14 @@ def classroom_setup(credentials_path, secrets):
         from google_auth_oauthlib.flow import InstalledAppFlow
         from googleapiclient.discovery import build
     except ImportError:
-        run_cli(sys.executable, ["-m", "pip", "install", "--user", "google-auth-oauthlib", "google-api-python-client"],
-                53, 58, "Installing Google Classroom support")
-        from google_auth_oauthlib.flow import InstalledAppFlow
-        from googleapiclient.discovery import build
+        install_python_packages(["google-auth-oauthlib", "google-api-python-client"],
+                                53, 58, "Installing Google Classroom support")
+        try:
+            from google_auth_oauthlib.flow import InstalledAppFlow
+            from googleapiclient.discovery import build
+        except ImportError as exc:
+            raise RuntimeError("Google Classroom support was installed but could not be imported. "
+                               "Restart Clock Setup after installing Python 3: %s" % exc)
 
     client_copy = os.path.join(secrets, "classroom_client.json")
     token_file = os.path.join(secrets, "classroom_token.json")
@@ -807,8 +833,8 @@ def main():
     root.attributes("-topmost", True)
     pad = {"padx": 16}
 
-    ttk.Label(root, text="Clock setup", font=("Segoe UI", 13, "bold")).pack(anchor="w", pady=(14, 2), **pad)
-    ttk.Label(root, text="Auto flashes the newest clock .bin. Beta compiles the newest clock source.",
+    ttk.Label(root, text=PRODUCT_NAME + " setup", font=("Segoe UI", 13, "bold")).pack(anchor="w", pady=(14, 2), **pad)
+    ttk.Label(root, text="ClockOS %s  •  Auto flashes the newest clock .bin. Beta compiles the newest source." % PRODUCT_VERSION,
               foreground="#555").pack(anchor="w", **pad)
 
     mode = tk.StringVar(value="auto")
