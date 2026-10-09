@@ -48,7 +48,9 @@
 #define HISTORY_FILE       "/data/preferences/history.json"
 #define ALARM_FILE         "/data/preferences/alarm.json"
 #define SETTINGS_FILE      "/data/preferences/settings.json"
-#define CLASSROOM_CACHE_FILE "/.source/data/secrets/classroom_cache.json"
+#define CLASSROOM_CACHE_FILE "/data/secrets/classroom_cache.json"
+#define CLASSROOM_SECRET_FILE "/data/secrets/classroomsecret.json"
+#define CLASSROOM_TOKEN_FILE "/data/secrets/classroom_token.json"
 
 // ---------- Weather (placeholder values on screen for now) ----------
 #define WEATHER_LAT  39.95      // Philadelphia

@@ -2,7 +2,7 @@
 
 ESP32 clock project for the Hosyond 4-inch ESP32-32E display.
 
-The current firmware iteration is **ClockOS 2.1**. The Arduino compatibility
+The current firmware iteration is **ClockOS 3.1**. The Arduino compatibility
 folder remains `updateV1` so existing SD-card and installer workflows continue
 to work; release binaries are versioned as ClockOS artifacts inside that slot.
 
@@ -60,6 +60,23 @@ Settings > SD Card can prepare the ClockOS folder layout, preserve current
 settings, show capacity/used space, and open a read-only root file viewer.
 The prepare action does not erase unrelated files; weather icons are installed
 by the Windows setup tool.
+
+ClockOS 3.1 uses a one-time Apple-style setup flow after a fresh install or
+Factory Reset. It asks whether Wi-Fi should be enabled, whether Google
+Classroom should be enabled, and whether the display is a **Main** or **Side**
+device for display synchronization. Up to five Wi-Fi networks are stored in
+`wifi.json` and tried in order. The sync compatibility rule accepts the same
+major version with a minor difference of at most `0.1`; incompatible displays
+are warned and must not be paired.
+
+The profile control uses the supplied default Apple-style silhouette. Google
+authorization remains performed by the Windows Clock Setup flow; the OAuth
+client is stored on the SD card as `/data/secrets/classroomsecret.json`, with
+the token and cache alongside it. Before a destructive SD wipe, the installer
+copies all existing `.json` files aside and restores them afterward. Google may
+still display an organization-review or administrator approval message; that
+restriction must be resolved in Google Cloud/Workspace and cannot be bypassed
+by ClockOS.
 
 Enable **Google Classroom notifications** in the installer and choose the Desktop OAuth JSON from Google Cloud. The installer also checks common user folders (`Downloads`, `Documents`, `Desktop`, and the installer folder) for OAuth-shaped `.json` files and asks **“Is this the Google OAuth secrets file for Clock?”** before selecting one. It opens Google sign-in **before erasing or installing the SD card**; choose the school account, approve read-only Classroom/Calendar access, and the installer saves the private client/token plus `classroom_cache.json` under `.source/data/secrets/`. Do not commit those files to GitHub. The cache contains active courses, published assignments/projects, announcements, submission status data, and upcoming Google Calendar events. The firmware reads the cache at startup and refreshes the displayed assignment summary every second; run the installer again to perform a new Google sync.
 

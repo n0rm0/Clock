@@ -20,7 +20,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog, filedialog
 
 OWNER, REPO, BRANCH = "n0rm0", "Clock", "main"
-PRODUCT_NAME, PRODUCT_VERSION = "ClockOS", "2.1"
+PRODUCT_NAME, PRODUCT_VERSION = "ClockOS", "3.1"
 SOURCE_ROOT = ".source/uncompiled/updates"
 UA = {"User-Agent": "clock-installer"}
 ICON_BASE = "https://raw.githubusercontent.com/basmilius/weather-icons/dev/production/fill"
@@ -49,7 +49,7 @@ CLASSROOM_SCOPES = [
     "https://www.googleapis.com/auth/classroom.announcements.readonly",
     "https://www.googleapis.com/auth/calendar.readonly",
 ]
-SECRETS_DIR = os.path.join(".source", "data", "secrets")
+SECRETS_DIR = os.path.join("data", "secrets")
 # TFT_eSPI settings passed at compile time (pins from the LCD wiki), so no library file is edited.
 TFT_FLAGS = " ".join([
     "-DUSER_SETUP_LOADED=1", "-DST7796_DRIVER=1", "-DTFT_WIDTH=320", "-DTFT_HEIGHT=480",
@@ -410,6 +410,40 @@ def _rm(func, path, _exc):
     func(path)
 
 
+def preserve_json_files(root):
+    """Copy every JSON file aside before a wipe so secrets/configs can return."""
+    stage = tempfile.mkdtemp(prefix="clock_sd_json_")
+    for current, dirs, files in os.walk(root):
+        dirs[:] = [d for d in dirs if d.lower() not in ("system volume information", "$recycle.bin")]
+        for name in files:
+            if not name.lower().endswith(".json"):
+                continue
+            src = os.path.join(current, name)
+            rel = os.path.relpath(src, root)
+            dst = os.path.join(stage, rel)
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            try:
+                shutil.copy2(src, dst)
+            except OSError:
+                pass
+    return stage
+
+
+def restore_json_files(root, stage):
+    if not stage or not os.path.isdir(stage):
+        return 0
+    count = 0
+    for current, _, files in os.walk(stage):
+        for name in files:
+            src = os.path.join(current, name)
+            rel = os.path.relpath(src, stage)
+            dst = os.path.join(root, rel)
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            shutil.copy2(src, dst)
+            count += 1
+    return count
+
+
 def wipe(root):
     for e in os.scandir(root):
         if e.name.lower() in ("system volume information", "$recycle.bin"):
@@ -426,7 +460,7 @@ def wipe(root):
 
 def structure(drive):
     for d in ("compiled/updates/updateV1", "compiled/bootloader/fallback/bootloaderV1",
-              "uncompiled/updates", "uncompiled/bootloader/fallback", "data", "data/preferences", "icons"):
+              "uncompiled/updates", "uncompiled/bootloader/fallback", "data", "data/preferences", "data/secrets", "icons"):
         os.makedirs(os.path.join(drive, ".source", d), exist_ok=True)
     if os.name == "nt":
         os.system('attrib +h "%s"' % os.path.join(drive, ".source"))
@@ -484,7 +518,7 @@ def classroom_setup(credentials_path, secrets):
             raise RuntimeError("Google Classroom support was installed but could not be imported. "
                                "Restart Clock Setup after installing Python 3: %s" % exc)
 
-    client_copy = os.path.join(secrets, "classroom_client.json")
+    client_copy = os.path.join(secrets, "classroomsecret.json")
     token_file = os.path.join(secrets, "classroom_token.json")
     cache_file = os.path.join(secrets, "classroom_cache.json")
     shutil.copy2(credentials_path, client_copy)
@@ -770,6 +804,7 @@ def build_and_flash(mode, do_flash, ask_port, ask_target, selected_port=None):
 # ------------------------------------------------------------------ the whole job
 def work(opts, ask_port, ask_target):
     classroom_stage = None
+    preserved_json = None
     try:
         drive, mode, do_dl, do_fl, update_only, manual, selected_port, classroom_enabled, credentials_path = opts
         n = m = 0
@@ -791,9 +826,13 @@ def work(opts, ask_port, ask_target):
         if do_dl:
             if not update_only:
                 prog(8, "Erasing SD card...")
+                preserved_json = preserve_json_files(drive)
                 wipe(drive)
             prog(15, "Creating folders on the SD card...")
             structure(drive)
+            if preserved_json:
+                restored = restore_json_files(drive, preserved_json)
+                S.summary.append("Preserved JSON files: %d" % restored)
             put_on_sd(drive, workspace())
             if classroom_stage:
                 target = os.path.join(drive, SECRETS_DIR)
@@ -820,6 +859,8 @@ def work(opts, ask_port, ask_target):
     finally:
         if classroom_stage:
             shutil.rmtree(classroom_stage, ignore_errors=True)
+        if preserved_json:
+            shutil.rmtree(preserved_json, ignore_errors=True)
         S.done = True
 
 

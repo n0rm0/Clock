@@ -28,6 +28,7 @@
 // declaration below. Keep the type visible to that generated prototype.
 struct Key;
 struct AlarmState;
+void alarmButton(int x, int y, int w, const String& label, bool selected = false);
 
 TFT_eSPI tft = TFT_eSPI();
 TFT_eSprite spr = TFT_eSprite(&tft);
@@ -36,15 +37,40 @@ TFT_eSprite spr = TFT_eSprite(&tft);
 #define C(r,g,b) tft.color565(r,g,b)
 uint16_t UI_BLUE, UI_BACK, UI_TEXT, UI_KEY, UI_LIP, UI_RED, UI_YEL, UI_GREEN;
 
-enum Screen { S_WELCOME, S_SCAN, S_KEYS, S_HOME, S_ALARM, S_CLOCK, S_SETTINGS, S_WIFI, S_WEATHER, S_CALENDAR, S_UPDATE, S_SDCARD, S_SDFILES };
+enum Screen { S_WELCOME, S_SCAN, S_KEYS, S_HOME, S_ALARM, S_CLOCK, S_SETTINGS, S_WIFI, S_WEATHER, S_CALENDAR, S_UPDATE, S_SDCARD, S_SDFILES, S_PROFILE };
 Screen screen = S_WELCOME;
 
 // ClockOS release identity. The sketch folder remains updateV1 for installer
-// compatibility, while the firmware/update feed is now ClockOS 2.1.
+// compatibility, while the firmware/update feed is now ClockOS 3.1.
 static const char* CLOCKOS_NAME = "ClockOS";
-static const char* CLOCKOS_VERSION = "2.1";
+static const char* CLOCKOS_VERSION = "3.1";
+static const char* SYNC_PROTOCOL_VERSION = "3.1";
+String syncPeerVersion = "";
+
+bool syncVersionCompatible(const String& peer) {
+  int dot = peer.indexOf('.');
+  int localDot = String(SYNC_PROTOCOL_VERSION).indexOf('.');
+  if (dot < 1 || localDot < 1) return false;
+  int peerMajor = peer.substring(0, dot).toInt();
+  int peerMinor = peer.substring(dot + 1).toInt();
+  int localMajor = String(SYNC_PROTOCOL_VERSION).substring(0, localDot).toInt();
+  int localMinor = String(SYNC_PROTOCOL_VERSION).substring(localDot + 1).toInt();
+  return peerMajor == localMajor && abs(peerMinor - localMinor) <= 1;
+}
+
+String syncCompatibilityText() {
+  if (!syncPeerVersion.length()) return "Waiting for another ClockOS display";
+  if (syncVersionCompatible(syncPeerVersion)) return "Compatible display: ClockOS " + syncPeerVersion;
+  return "Warning: ClockOS " + syncPeerVersion + " is not compatible";
+}
+
+void drawProfileIcon(int cx, int cy, uint16_t color) {
+  tft.fillCircle(cx, cy - 7, 7, color);
+  tft.fillRoundRect(cx - 14, cy + 2, 28, 16, 12, color);
+}
 
 String selSsid, password, errMsg;
+String profileName = "Not signed in";
 String ssids[5]; int rssis[5]; int nNets = 0;
 bool showPass = false; uint8_t layer = 0;
 bool sdOk = false;       // valid ClockOS-formatted SD card
@@ -53,6 +79,7 @@ String sdCardMessage = "";
 bool screenSleeping = false;
 bool factoryResetArmed = false;
 uint32_t lastActivity = 0;
+bool swipeBackDetected = false;
 
 // ====================================================================
 //  text helper (GFX free fonts)
@@ -106,13 +133,21 @@ void ensureCalibration() {
 
 bool readTouch(int &x, int &y) {
   static uint32_t last = 0;
+  static int startX = -1, startY = -1;
+  static uint32_t startAt = 0;
   uint16_t tx, ty;
   // TFT_eSPI documents Z=350 as the default pressure threshold. Passing it
   // explicitly prevents the disconnected/idle XPT2046 readings from acting
   // like touches (the test sketch previously exposed this as RAW_X=0).
   if (tft.getTouch(&tx, &ty, 350) && millis() - last > 220) {
-    last = millis(); lastActivity = millis(); x = tx; y = ty; return true;
+    uint32_t now = millis();
+    if (startX < 0 || now - startAt > 900) { startX = tx; startY = ty; startAt = now; }
+    swipeBackDetected = (tx > startX + 90 && abs((int)ty - startY) < 70 && now - startAt < 900);
+    last = now; lastActivity = now; x = tx; y = ty;
+    if (swipeBackDetected) { startX = -1; startY = -1; }
+    return true;
   }
+  if (!tft.getTouch(&tx, &ty, 350)) { startX = -1; startY = -1; }
   return false;
 }
 
@@ -151,17 +186,27 @@ bool alarmRinging = false;
 
 struct AppSettings {
   bool offline;
+  bool wifiEnabled;
   bool use24Hour;
   bool showBatteryPercent;
   bool notifications;
   bool calendarEnabled;
   bool manualWeather;
+  bool classroomEnabled;
+  bool setupComplete;
+  bool syncEnabled;
+  bool syncMain;
 };
-AppSettings settings = {false, false, true, true, true, false};
+AppSettings settings = {false, true, false, true, true, true, false, false, false, false, true};
+struct SavedNetwork { String ssid; String password; };
+SavedNetwork savedNetworks[5];
+uint8_t savedNetworkCount = 0;
 String manualCity = "Philadelphia";
 double manualLat = WEATHER_LAT;
 double manualLon = WEATHER_LON;
 bool editingCity = false;
+bool firstSetupClassroom = false;
+bool firstSetupSync = false;
 String nextAssignment = "No Classroom assignments";
 String nextAssignmentCourse = "";
 String nextAssignmentDue = "";
@@ -418,7 +463,19 @@ void saveCreds() {
   File f = SD.open(WIFI_FILE, FILE_WRITE);
   if (!f) return;
   DynamicJsonDocument doc(768);
-  doc["ssid"] = selSsid; doc["password"] = password;
+  JsonArray networks = doc.createNestedArray("networks");
+  int existing = -1;
+  for (int i = 0; i < savedNetworkCount; i++) if (savedNetworks[i].ssid == selSsid) existing = i;
+  if (existing < 0 && savedNetworkCount < 5) {
+    savedNetworks[savedNetworkCount].ssid = selSsid;
+    savedNetworks[savedNetworkCount].password = password;
+    savedNetworkCount++;
+  } else if (existing >= 0) savedNetworks[existing].password = password;
+  for (int i = 0; i < savedNetworkCount; i++) {
+    JsonObject network = networks.createNestedObject();
+    network["ssid"] = savedNetworks[i].ssid;
+    network["password"] = savedNetworks[i].password;
+  }
   serializeJson(doc, f); f.close();
 }
 
@@ -428,10 +485,35 @@ bool loadCreds() {
   if (!f) return false;
   DynamicJsonDocument doc(768);
   if (deserializeJson(doc, f) != DeserializationError::Ok) { f.close(); return false; }
-  selSsid = (const char*)(doc["ssid"] | "");
-  password = (const char*)(doc["password"] | "");
+  savedNetworkCount = 0;
+  JsonArray networks = doc["networks"].as<JsonArray>();
+  if (!networks.isNull()) {
+    for (JsonObject network : networks) {
+      if (savedNetworkCount >= 5) break;
+      savedNetworks[savedNetworkCount].ssid = (const char*)(network["ssid"] | "");
+      savedNetworks[savedNetworkCount].password = (const char*)(network["password"] | "");
+      if (savedNetworks[savedNetworkCount].ssid.length()) savedNetworkCount++;
+    }
+  } else {
+    // Migrate the v2 single-network JSON format.
+    selSsid = (const char*)(doc["ssid"] | "");
+    password = (const char*)(doc["password"] | "");
+    if (selSsid.length()) {
+      savedNetworks[0] = {selSsid, password}; savedNetworkCount = 1;
+    }
+  }
+  if (savedNetworkCount) { selSsid = savedNetworks[0].ssid; password = savedNetworks[0].password; }
   f.close();
-  return selSsid.length() > 0;
+  return savedNetworkCount > 0;
+}
+
+bool trySavedNetworks(uint32_t timeoutMs) {
+  if (!savedNetworkCount) return false;
+  for (int i = 0; i < savedNetworkCount; i++) {
+    selSsid = savedNetworks[i].ssid; password = savedNetworks[i].password;
+    if (tryConnect(timeoutMs)) return true;
+  }
+  return false;
 }
 
 void saveAlarm() {
@@ -470,9 +552,11 @@ void saveSettings() {
   File f = SD.open(SETTINGS_FILE, FILE_WRITE);
   if (!f) return;
   DynamicJsonDocument doc(1024);
-  doc["offline"] = settings.offline; doc["use24Hour"] = settings.use24Hour;
+  doc["offline"] = settings.offline; doc["wifiEnabled"] = settings.wifiEnabled; doc["use24Hour"] = settings.use24Hour;
   doc["showBatteryPercent"] = settings.showBatteryPercent; doc["notifications"] = settings.notifications;
   doc["calendarEnabled"] = settings.calendarEnabled; doc["manualWeather"] = settings.manualWeather;
+  doc["classroomEnabled"] = settings.classroomEnabled; doc["setupComplete"] = settings.setupComplete;
+  doc["syncEnabled"] = settings.syncEnabled; doc["syncMain"] = settings.syncMain;
   doc["manualCity"] = manualCity; doc["manualLat"] = manualLat; doc["manualLon"] = manualLon;
   serializeJson(doc, f);
   f.close();
@@ -485,11 +569,16 @@ void loadSettings() {
   DynamicJsonDocument doc(1024);
   if (deserializeJson(doc, f) != DeserializationError::Ok) { f.close(); return; }
   settings.offline = doc["offline"] | false;
+  settings.wifiEnabled = doc["wifiEnabled"] | true;
   settings.use24Hour = doc["use24Hour"] | false;
   settings.showBatteryPercent = doc["showBatteryPercent"] | true;
   settings.notifications = doc["notifications"] | true;
   settings.calendarEnabled = doc["calendarEnabled"] | true;
   settings.manualWeather = doc["manualWeather"] | false;
+  settings.classroomEnabled = doc["classroomEnabled"] | false;
+  settings.setupComplete = doc["setupComplete"] | false;
+  settings.syncEnabled = doc["syncEnabled"] | false;
+  settings.syncMain = doc["syncMain"] | true;
   String savedCity = (const char*)(doc["manualCity"] | "");
   if (savedCity.length()) manualCity = savedCity;
   manualLat = doc["manualLat"] | manualLat;
@@ -498,7 +587,7 @@ void loadSettings() {
 }
 
 void loadClassroomCache() {
-  if (!sdOk || !SD.exists(CLASSROOM_CACHE_FILE)) return;
+  if (!sdOk || !settings.classroomEnabled || !SD.exists(CLASSROOM_CACHE_FILE)) return;
   File f = SD.open(CLASSROOM_CACHE_FILE);
   if (!f) return;
   DynamicJsonDocument doc(16384);
@@ -571,8 +660,41 @@ bool tryConnect(uint32_t timeoutMs) {
 void showWelcome() {
   screen = S_WELCOME;
   tft.fillScreen(UI_BLUE);
-  txt(F24B, 0x0000, TC_DATUM, "Hi, Welcome", 240, 90);
-  txt(F12B, UI_TEXT, TC_DATUM, "tap to continue setup", 240, 160);
+  txt(F24B, 0x0000, TC_DATUM, "Welcome to ClockOS", 240, 78);
+  txt(F12B, UI_TEXT, TC_DATUM, "Let's set up your clock", 240, 122);
+  txt(F12, UI_TEXT, TC_DATUM, "Would you like to turn Wi-Fi on?", 240, 158);
+  alarmButton(24, 214, 200, "Wi-Fi On", true);
+  alarmButton(256, 214, 200, "Wi-Fi Off");
+}
+
+void showClassroomSetup() {
+  screen = S_SETTINGS;
+  firstSetupClassroom = true;
+  tft.fillScreen(UI_BACK);
+  txt(F18B, 0x0000, TC_DATUM, "Google Classroom", 240, 42);
+  txt(F12, 0x0000, TC_DATUM, "Show assignments and calendar reminders?", 240, 92);
+  alarmButton(28, 144, 190, "Enable", settings.classroomEnabled);
+  alarmButton(262, 144, 190, "Not now", !settings.classroomEnabled);
+  txt(F12, 0x0000, TC_DATUM, "You can change this in Settings.", 240, 230);
+}
+
+void showSyncSetup() {
+  screen = S_SETTINGS;
+  firstSetupClassroom = false; firstSetupSync = true;
+  tft.fillScreen(UI_BACK);
+  txt(F18B, 0x0000, TC_DATUM, "Sync displays", 240, 42);
+  txt(F12, 0x0000, TC_DATUM, "Share time, alarms, and settings?", 240, 92);
+  alarmButton(20, 132, 140, "Off", !settings.syncEnabled);
+  alarmButton(170, 132, 140, "Main device", settings.syncEnabled && settings.syncMain);
+  alarmButton(320, 132, 140, "Side device", settings.syncEnabled && !settings.syncMain);
+  txt(F12, 0x0000, TC_DATUM, "Main sends time and alarms; Side receives them.", 240, 220);
+  txt(F12, syncPeerVersion.length() && !syncVersionCompatible(syncPeerVersion) ? UI_RED : 0x0000,
+      TC_DATUM, syncCompatibilityText(), 240, 264);
+}
+
+void finishFirstSetup() {
+  firstSetupClassroom = false;
+  showSyncSetup();
 }
 
 void scanNetworks() {
@@ -772,6 +894,7 @@ void drawStatusBlock() {
   int lvl = (WiFi.status() == WL_CONNECTED) ? rssiLevel(WiFi.RSSI()) : 0;
   drawWifiSignal(28, 307, lvl, 0x0000, COL_WHITE, 0x39E7);
   drawSdCardIcon(104, 307, sdOk, sdPresent && !sdOk);
+  drawProfileIcon(136, 307, COL_DIM);
   int pct = readBatteryPct();
   drawBattery(170, 298, pct, 0x0000, COL_WHITE);
   if (settings.showBatteryPercent) {
@@ -865,7 +988,7 @@ void adjustClockDate(int field, int amount) {
   }
 }
 
-void alarmButton(int x, int y, int w, const String& label, bool selected = false) {
+void alarmButton(int x, int y, int w, const String& label, bool selected) {
   tft.fillRoundRect(x, y, w, 30, 6, selected ? UI_BLUE : UI_KEY);
   tft.drawRoundRect(x, y, w, 30, 6, selected ? UI_BLUE : UI_LIP);
   txt(F12B, selected ? UI_TEXT : 0x0000, MC_DATUM, label, x + w / 2, y + 15);
@@ -1044,6 +1167,16 @@ void showSdFilesPage() {
   if (!row) txt(F12, 0x0000, TC_DATUM, "No readable files", 240, 110);
 }
 
+void showProfilePage() {
+  screen = S_PROFILE; drawBackHeader("Profile");
+  tft.fillRoundRect(34, 50, 412, 190, 22, 0xFFFF);
+  drawProfileIcon(105, 116, C(120, 125, 138));
+  txt(F18B, C(25, 26, 32), ML_DATUM, profileName, 145, 104);
+  txt(F12, C(100, 102, 112), ML_DATUM, settings.classroomEnabled ? "Google Classroom sync enabled" : "Classroom sync disabled", 145, 132);
+  alarmButton(82, 176, 316, "Sign in with Clock Setup", true);
+  txt(F12, C(85, 88, 98), TC_DATUM, "Use the Windows setup app to authorize Google.", 240, 270);
+}
+
 void drawBackHeader(const String& title) {
   tft.fillScreen(UI_BACK);
   alarmButton(8, 8, 78, "Back");
@@ -1051,18 +1184,25 @@ void drawBackHeader(const String& title) {
   drawSdCardIcon(438, 24, sdOk, sdPresent && !sdOk);
 }
 
+void settingsRow(int x, int y, const String& label, const String& value = "", bool accent = false) {
+  uint16_t blue = C(0, 122, 255);
+  tft.fillRoundRect(x, y, 210, 34, 10, 0xFFFF);
+  txt(F12, C(30, 32, 38), ML_DATUM, label, x + 12, y + 17);
+  if (value.length()) txt(F12, accent ? blue : C(110, 112, 120), MR_DATUM, value, x + 198, y + 17);
+}
+
 void showSettingsPage() {
   screen = S_SETTINGS; drawBackHeader("Settings");
-  alarmButton(14, 50, 210, String("Offline mode: ") + (settings.offline ? "ON" : "OFF"), settings.offline);
-  alarmButton(256, 50, 210, String("Time: ") + (settings.use24Hour ? "24 hour" : "12 hour"), settings.use24Hour);
-  alarmButton(14, 92, 210, String("Battery percent: ") + (settings.showBatteryPercent ? "ON" : "OFF"), settings.showBatteryPercent);
-  alarmButton(256, 92, 210, String("Notifications: ") + (settings.notifications ? "ON" : "OFF"), settings.notifications);
-  alarmButton(14, 134, 210, String("Calendar: ") + (settings.calendarEnabled ? "ON" : "OFF"), settings.calendarEnabled);
-  alarmButton(256, 134, 210, String("Weather: ") + (settings.manualWeather ? "Manual" : "Automatic"), settings.manualWeather);
-  alarmButton(14, 184, 210, "Wi-Fi settings");
-  alarmButton(256, 184, 210, "Weather settings");
-  alarmButton(14, 226, 210, "Set date / time");
-  alarmButton(256, 226, 210, "Check online update");
+  settingsRow(14, 50, "Offline mode", settings.offline ? "ON" : "OFF", settings.offline);
+  settingsRow(256, 50, "Time", settings.use24Hour ? "24 hour" : "12 hour", settings.use24Hour);
+  settingsRow(14, 92, "Battery percent", settings.showBatteryPercent ? "ON" : "OFF", settings.showBatteryPercent);
+  settingsRow(256, 92, "Classroom", settings.classroomEnabled ? "ON" : "OFF", settings.classroomEnabled);
+  settingsRow(14, 134, "Calendar", settings.calendarEnabled ? "ON" : "OFF", settings.calendarEnabled);
+  settingsRow(256, 134, "Weather", settings.manualWeather ? "Manual" : "Automatic", settings.manualWeather);
+  settingsRow(14, 184, "SD Card", sdOk ? "Ready" : (sdPresent ? "Needs setup" : "None"), sdOk);
+  settingsRow(256, 184, "Wi-Fi", WiFi.status() == WL_CONNECTED ? "Connected" : "Offline", WiFi.status() == WL_CONNECTED);
+  settingsRow(14, 226, "Classroom", settings.classroomEnabled ? "ON" : "OFF", settings.classroomEnabled);
+  settingsRow(256, 226, "Weather settings", ">", false);
   alarmButton(120, 266, 240, factoryResetArmed ? "Tap again to reset" : "Factory reset", factoryResetArmed);
   txt(F12, 0x0000, TC_DATUM, "Orientation: permanent 180 degrees", 240, 311);
 }
@@ -1105,8 +1245,10 @@ void factoryResetClock() {
   if (sdOk) {
     SD.remove(SETTINGS_FILE); SD.remove(ALARM_FILE); SD.remove(WIFI_FILE); SD.remove(TOUCH_FILE);
     SD.rmdir(PREFERENCES_DIR);
-    SD.remove(CLASSROOM_CACHE_FILE); SD.remove("/.source/data/secrets/classroom_token.json");
+    SD.remove(CLASSROOM_CACHE_FILE); SD.remove(CLASSROOM_TOKEN_FILE);
+    SD.remove("/.source/data/secrets/classroom_token.json");
     SD.remove("/.source/data/secrets/classroom_client.json");
+    settings.setupComplete = false; settings.classroomEnabled = false;
   }
   factoryResetArmed = false;
   delay(250);
@@ -1227,15 +1369,17 @@ void setup() {
   loadClassroomCache();
   lastActivity = millis();
 
-  if (settings.offline) {
+  if (!settings.setupComplete) {
+    showWelcome();
+  } else if (settings.offline || !settings.wifiEnabled) {
     showClockEditor();
-  } else if (sdOk && loadCreds() && tryConnect(15000)) {
+  } else if (sdOk && loadCreds() && trySavedNetworks(15000)) {
     configTzTime(TIME_TZ, NTP_SERVER);
     fetchWeather();
     runUpdate();
     showHome();
   } else {
-    showWelcome();
+    showHome();
   }
 }
 
@@ -1257,7 +1401,10 @@ void loop() {
   }
 
   if (screen == S_WELCOME) {
-    if (readTouch(x, y)) showScan();
+    if (readTouch(x, y) && y >= 190) {
+      if (x < 240) { settings.wifiEnabled = true; showScan(); }
+      else { settings.wifiEnabled = false; settings.offline = true; showClassroomSetup(); }
+    }
 
   } else if (screen == S_SCAN) {
     if (readTouch(x, y)) {
@@ -1301,7 +1448,7 @@ void loop() {
               fetchWeather();
               loadAlarm();
               runUpdate();
-              showHome();
+              showClassroomSetup();
             } else {
               errMsg = "could not connect - check password";
               showKeyboard();
@@ -1321,6 +1468,7 @@ void loop() {
       if (x >= 240 && y < 168) { showWeatherPage(); return; }
       if (x >= 240 && y >= 168) { showCalendarPage(); return; }
       if (x < 240 && y >= 270 && x < 95) { showWifiPage(); return; }
+      if (x < 240 && y >= 270 && x >= 95 && x < 155) { showProfilePage(); return; }
       if (x < 240 && y >= 270 && x >= 150) { showSettingsPage(); return; }
       if (x < 240 && y >= 190) { settings.use24Hour = !settings.use24Hour; saveSettings(); drawTimeBlock(); return; }
       if (x < 240 && y < 190) { showAlarmEditor(); return; }
@@ -1358,18 +1506,31 @@ void loop() {
     }
   } else if (screen == S_SETTINGS) {
     if (!readTouch(x, y)) return;
+    if (swipeBackDetected) { swipeBackDetected = false; showHome(); return; }
+    if (firstSetupClassroom) {
+      if (y >= 135 && y < 205 && x < 240) { settings.classroomEnabled = true; finishFirstSetup(); return; }
+      if (y >= 135 && y < 205 && x >= 240) { settings.classroomEnabled = false; finishFirstSetup(); return; }
+      return;
+    }
+    if (firstSetupSync) {
+      if (y >= 125 && y < 205 && x < 160) { settings.syncEnabled = false; settings.syncMain = true; }
+      else if (y >= 125 && y < 205 && x < 320) { settings.syncEnabled = true; settings.syncMain = true; }
+      else if (y >= 125 && y < 205) { settings.syncEnabled = true; settings.syncMain = false; }
+      else return;
+      firstSetupSync = false; settings.setupComplete = true; saveSettings(); showHome(); return;
+    }
     if (x < 100 && y < 45) { leaveSettingsPage(); return; }
     if (x >= 400 && y < 50) { showSdCardPage(); return; }
     if (y >= 50 && y < 84 && x < 240) settings.offline = !settings.offline;
     else if (y >= 50 && y < 84 && x >= 240) settings.use24Hour = !settings.use24Hour;
     else if (y >= 92 && y < 126 && x < 240) settings.showBatteryPercent = !settings.showBatteryPercent;
-    else if (y >= 92 && y < 126 && x >= 240) settings.notifications = !settings.notifications;
+    else if (y >= 92 && y < 126 && x >= 240) settings.classroomEnabled = !settings.classroomEnabled;
     else if (y >= 134 && y < 168 && x < 240) settings.calendarEnabled = !settings.calendarEnabled;
     else if (y >= 134 && y < 168 && x >= 240) settings.manualWeather = !settings.manualWeather;
-    else if (y >= 184 && y < 218 && x < 240) { saveSettings(); showWifiPage(); return; }
-    else if (y >= 184 && y < 218 && x >= 240) { saveSettings(); showWeatherPage(); return; }
-    else if (y >= 226 && y < 260 && x < 240) { showClockEditor(); return; }
-    else if (y >= 226 && y < 260 && x >= 240) { saveSettings(); runUpdate(); showSettingsPage(); return; }
+    else if (y >= 184 && y < 218 && x < 240) { showSdCardPage(); return; }
+    else if (y >= 184 && y < 218 && x >= 240) { saveSettings(); showWifiPage(); return; }
+    else if (y >= 226 && y < 260 && x < 240) { settings.classroomEnabled = !settings.classroomEnabled; saveSettings(); showSettingsPage(); return; }
+    else if (y >= 226 && y < 260 && x >= 240) { saveSettings(); showWeatherPage(); return; }
     else if (y >= 266 && y < 301 && x >= 100 && x <= 380) {
       if (factoryResetArmed) factoryResetClock();
       factoryResetArmed = true; showSettingsPage(); return;
@@ -1377,26 +1538,40 @@ void loop() {
     saveSettings(); showSettingsPage();
   } else if (screen == S_SDCARD) {
     if (!readTouch(x, y)) return;
+    if (swipeBackDetected) { swipeBackDetected = false; showSettingsPage(); return; }
     if (x < 100 && y < 45) { showSettingsPage(); return; }
     if (y >= 174 && y < 214 && x < 240) { prepareSdCard(); showSdCardPage(); return; }
     if (y >= 174 && y < 214 && x >= 240) { showSdFilesPage(); return; }
   } else if (screen == S_SDFILES) {
-    if (readTouch(x, y) && x < 100 && y < 45) showSdCardPage();
+    if (readTouch(x, y)) {
+      if (swipeBackDetected) { swipeBackDetected = false; showSdCardPage(); return; }
+      if (x < 100 && y < 45) showSdCardPage();
+    }
+  } else if (screen == S_PROFILE) {
+    if (readTouch(x, y)) {
+      if (swipeBackDetected) { swipeBackDetected = false; showHome(); return; }
+      if (x < 100 && y < 45) showHome();
+    }
   } else if (screen == S_WIFI) {
     if (!readTouch(x, y)) return;
+    if (swipeBackDetected) { swipeBackDetected = false; showHome(); return; }
     if (x < 100 && y < 45) { showHome(); return; }
     if (y >= 120 && y < 155 && x < 230) { showScan(); return; }
     if (y >= 120 && y < 155 && x >= 230) { settings.offline = !settings.offline; saveSettings(); showWifiPage(); return; }
     if (y >= 170 && y < 205) { showScan(); return; }
   } else if (screen == S_WEATHER) {
     if (!readTouch(x, y)) return;
+    if (swipeBackDetected) { swipeBackDetected = false; showHome(); return; }
     if (x < 100 && y < 45) { showHome(); return; }
     if (y >= 100 && y < 140 && x < 240) { settings.manualWeather = false; saveSettings(); fetchWeather(); showWeatherPage(); return; }
     if (y >= 100 && y < 140 && x >= 240) { settings.manualWeather = true; saveSettings(); fetchWeather(); showWeatherPage(); return; }
     if (y >= 145 && y < 180) { showCityKeyboard(); return; }
     if (y >= 230 && y < 280) { fetchWeather(); showWeatherPage(); return; }
   } else if (screen == S_CALENDAR) {
-    if (readTouch(x, y) && x < 100 && y < 45) showHome();
+    if (readTouch(x, y)) {
+      if (swipeBackDetected) { swipeBackDetected = false; showHome(); return; }
+      if (x < 100 && y < 45) showHome();
+    }
   } else if (screen == S_ALARM) {
     if (!readTouch(x, y)) return;
     if (y >= 78 && y < 112) {

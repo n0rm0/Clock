@@ -131,4 +131,6 @@ This checklist reflects the requirements in [`agent.md`](agent.md) and the files
 - [x] Copy the verified ClockOS 2.1 binary into `.source/compiled/updates/updateV1/` for Auto mode.
 - [x] Store settings, Wi-Fi, alarm, and touch preferences as JSON under `/data/preferences/` only when a valid ClockOS SD card is present.
 - [x] Show filled, outline, or X-marked SD-card status and warn on Settings exit when changes cannot be saved.
+- [x] Upgrade the release identity to ClockOS 3.1 with one-time first-run setup, Wi-Fi on/off choice, Classroom toggle, Main/Side sync role, Apple-style Settings rows, profile silhouette, swipe-back navigation, multi-network JSON storage, and sync-version compatibility warnings.
+- [x] Preserve SD-card JSON files during installer wipes and store the OAuth client as `/data/secrets/classroomsecret.json`.
 - [ ] Test the updated `.bat` on Windows: OAuth JSON auto-detection, school-account sign-in, SD-card secret/cache placement, flashing, and headless launcher behavior.
