@@ -19,6 +19,10 @@
 #include "config.h"
 #include "bootloader.h"   // GitHub updater
 
+// Arduino's automatic prototype generation sees keyLabel() before the full
+// declaration below. Keep the type visible to that generated prototype.
+struct Key;
+
 TFT_eSPI tft = TFT_eSPI();
 TFT_eSprite spr = TFT_eSprite(&tft);
 
@@ -101,9 +105,10 @@ static void* pngOpen(const char* fn, int32_t* size) { pngFile = SD.open(fn); *si
 static void pngClose(void*) { if (pngFile) pngFile.close(); }
 static int32_t pngRead(PNGFILE*, uint8_t* buf, int32_t len) { return pngFile ? pngFile.read(buf, len) : 0; }
 static int32_t pngSeek(PNGFILE*, int32_t pos) { return pngFile ? pngFile.seek(pos) : 0; }
-static void pngDraw(PNGDRAW* d) {
+static int pngDraw(PNGDRAW* d) {
   png.getLineAsRGB565(d, lineBuf, PNG_RGB565_BIG_ENDIAN, 0xffffffff);
   tft.pushImage(pngX, pngY + d->y, d->iWidth, 1, lineBuf);
+  return 0;
 }
 
 bool drawPng(const char* path, int x, int y) {

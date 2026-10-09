@@ -99,6 +99,8 @@ This checklist reflects the requirements in [`agent.md`](agent.md) and the files
 - [x] Save successful compile-only binaries to `Downloads/ClockBuilds/<sketch>.bin`.
 - [x] Add an explicit firmware-target picker before selecting the ESP32 serial port; Manual mode can target a bootloader sketch.
 - [x] Show cleaned, expanded compiler diagnostics when a build fails.
+- [x] Restrict automatic/Beta compilation and stable downloads to the clock application; fallback bootloader binaries are never selected automatically.
+- [x] Fix the clock sketch's Arduino `Key` prototype and PNGdec callback compile errors shown by the Windows build.
 - [x] Remove the generated `extras` folder from source arrangement.
 - [x] Place installed raw update sketches under the SD card `.source/uncompiled/updates/` tree.
 - [x] Make the `.bat` launch Python with `pythonw` and a hidden bootstrap process instead of a visible terminal.

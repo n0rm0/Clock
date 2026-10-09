@@ -222,7 +222,7 @@ def remove_stale_sketches(dest, current_inos):
     if not os.path.isdir(dest):
         return
     for entry in os.scandir(dest):
-        if not entry.is_dir() or entry.name.startswith("."):
+        if not entry.is_dir() or entry.name.startswith(".") or entry.name.lower().startswith("bootloaderv"):
             continue
         ino = os.path.join(entry.path, entry.name + ".ino")
         if os.path.isfile(ino) and entry.name.lower() not in current:
@@ -684,7 +684,7 @@ def main():
     pad = {"padx": 16}
 
     ttk.Label(root, text="Clock setup", font=("Segoe UI", 13, "bold")).pack(anchor="w", pady=(14, 2), **pad)
-    ttk.Label(root, text="Auto flashes the newest stable .bin. Beta compiles the newest raw source.",
+    ttk.Label(root, text="Auto flashes the newest clock .bin. Beta compiles the newest clock source.",
               foreground="#555").pack(anchor="w", **pad)
 
     mode = tk.StringVar(value="auto")
@@ -696,8 +696,8 @@ def main():
 
     def info():
         messagebox.showinfo("Clock setup modes",
-            "Auto (recommended): downloads and flashes the newest .bin from GitHub. It does not compile source.\n\n"
-            "Beta (unstable): downloads the newest raw update .ino/.h files from GitHub, compiles the application only, and can flash it.\n\n"
+            "Auto (recommended): downloads and flashes the newest clock application .bin from GitHub. It never downloads the fallback bootloader.\n\n"
+            "Beta (unstable): downloads the newest raw clock update .ino/.h files from GitHub, compiles the application only, and can flash it.\n\n"
             "Manual: choose a folder containing the .ino and .h files you want to compile. It can compile all selected sketches and flash the selected result. Verify the folder before continuing.",
             parent=root)
     ttk.Button(modes, text="Info", command=info).pack(side="left", padx=(12, 0))
