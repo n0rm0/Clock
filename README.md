@@ -31,4 +31,4 @@ Raw sketches installed to an SD card are placed under `.source/uncompiled/update
 
 The compiled tree must contain only real `.bin` files. No compiled binaries were included yet, so its empty directories are created when the installer prepares the SD card. See [.agent/todo.md](.agent/todo.md) for validation items.
 
-The display is now set to rotation `3` (180°). The official TFT_eSPI calibration output `{410, 3427, 282, 2968, 7}` is hardwired into the clock firmware, so it uses that mapping directly and does not launch the calibration screen or overwrite it from the SD card. The standalone touch test remains available at [.source/touch_test/touch_test.ino](.source/touch_test/touch_test.ino) if the panel is replaced.
+The display is now set to rotation `3` (180°). The more accurate official TFT_eSPI calibration output `{267, 3537, 234, 3416, 7}` is hardwired into the clock firmware, so it uses that mapping directly and does not launch the calibration screen or overwrite it from the SD card. The standalone touch test remains available at [.source/touch_test/touch_test.ino](.source/touch_test/touch_test.ino) if the panel is replaced.
