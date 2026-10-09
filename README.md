@@ -73,6 +73,12 @@ please wait…** dialog and an animated progress bar while the main setup window
 is initialized. This makes the hidden batch launcher feel intentional rather
 than appearing to run an unknown background process.
 
+For a completely console-free launch, double-click `setup_sd.vbs` instead of
+the `.bat` file. Windows necessarily creates a console host when Explorer
+directly opens a `.bat`, so a tiny black flash cannot be eliminated from the
+`.bat` entry point itself. The VBScript launcher starts the same batch through
+its hidden path and shows only the ClockOS Setup dialog.
+
 ClockOS 3.1 uses a one-time Apple-style setup flow after a fresh install or
 Factory Reset. It asks whether Wi-Fi should be enabled, whether Google
 Classroom should be enabled, and whether the display is a **Main** or **Side**
