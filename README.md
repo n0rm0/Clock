@@ -23,6 +23,8 @@ The clock fetches the newest update from `.source/compiled/updates/`. The `.bat`
 
 The installer has three modes. **Auto (recommended)** downloads and flashes the newest compiled `.bin` without compiling source. **Beta (unstable)** downloads the newest raw update sketch and compiles only that application sketch, rather than stale `clock` or bootloader folders left on the computer. **Manual** lets you select a folder containing the `.ino` and `.h` files to compile, including a bootloader sketch when explicitly selected. Successful compile-only binaries are saved as `Downloads/ClockBuilds/<sketch>.bin`.
 
-When flashing a compiled sketch, the installer first asks which firmware target to upload and then asks which ESP32 serial port to use. The port list excludes Windows drive letters and shows detected board names such as `ESP32 Dev Module`. Build errors display cleaned compiler output instead of only an abbreviated ANSI log.
+When flashing a compiled sketch, the installer shows a visible **Flash device** selector with refresh, then asks which firmware target to upload when multiple sketches are available. The port list excludes Windows drive letters and shows detected board names such as `ESP32 Dev Module`. Build errors display cleaned compiler output instead of only an abbreviated ANSI log.
+
+Raw sketches installed to an SD card are placed under `.source/uncompiled/updates/<version>/` or `.source/uncompiled/bootloader/fallback/<version>/`; no root-level `updateV1` folder or `extras` folder is created.
 
 The compiled tree must contain only real `.bin` files. No compiled binaries were included yet, so its empty directories are created when the installer prepares the SD card. See [.agent/todo.md](.agent/todo.md) for validation items.

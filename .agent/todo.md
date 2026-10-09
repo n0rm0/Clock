@@ -99,3 +99,7 @@ This checklist reflects the requirements in [`agent.md`](agent.md) and the files
 - [x] Save successful compile-only binaries to `Downloads/ClockBuilds/<sketch>.bin`.
 - [x] Add an explicit firmware-target picker before selecting the ESP32 serial port; Manual mode can target a bootloader sketch.
 - [x] Show cleaned, expanded compiler diagnostics when a build fails.
+- [x] Remove the generated `extras` folder from source arrangement.
+- [x] Place installed raw update sketches under the SD card `.source/uncompiled/updates/` tree.
+- [x] Make the `.bat` launch Python with `pythonw` and a hidden bootstrap process instead of a visible terminal.
+- [x] Add a visible Flash device selector with refresh to the installer window.

@@ -210,8 +210,9 @@ def arrange(stage, dest):
         if rel in placed or not os.path.exists(files[rel]):
             continue
         stem = os.path.splitext(os.path.basename(rel))[0].lower()
-        folder = os.path.join(dest, stems[stem]) if stem in stems else os.path.join(dest, "extras", os.path.dirname(rel))
-        put(rel, folder)
+        # Do not create an extras folder. Unreferenced files are not part of a
+        # sketch payload and must not be copied into the user's source tree.
+        continue
     return inos
 
 
@@ -361,7 +362,8 @@ def wipe(root):
 
 
 def structure(drive):
-    for d in ("compiled/updates/updateV1", "compiled/bootloader/fallback/bootloaderV1", "data", "icons"):
+    for d in ("compiled/updates/updateV1", "compiled/bootloader/fallback/bootloaderV1",
+              "uncompiled/updates", "uncompiled/bootloader/fallback", "data", "icons"):
         os.makedirs(os.path.join(drive, ".source", d), exist_ok=True)
     if os.name == "nt":
         os.system('attrib +h "%s"' % os.path.join(drive, ".source"))
@@ -399,10 +401,17 @@ def icons(drive, lo, hi):
 
 
 def put_on_sd(drive, ws):
-    """Copy every sketch folder from the workspace onto the (already wiped) SD card."""
+    """Copy raw sketch folders into the SD card's .source/uncompiled tree."""
+    root = os.path.join(drive, ".source", "uncompiled")
     for e in os.scandir(ws):
         if e.is_dir() and e.name not in ("build", ".build"):
-            shutil.copytree(e.path, os.path.join(drive, e.name), dirs_exist_ok=True)
+            if e.name.lower().startswith("bootloaderv"):
+                target = os.path.join(root, "bootloader", "fallback", e.name)
+            elif e.name.lower().startswith("updatev"):
+                target = os.path.join(root, "updates", e.name)
+            else:
+                continue
+            shutil.copytree(e.path, target, dirs_exist_ok=True)
 
 
 # ------------------------------------------------------------------ arduino-cli (the engine inside Arduino IDE 2)
@@ -577,7 +586,7 @@ def ask_sketch(sketches, root, default=None):
     return box.get("name")
 
 
-def build_and_flash(mode, do_flash, ask_port, ask_target):
+def build_and_flash(mode, do_flash, ask_port, ask_target, selected_port=None):
     cli = find_cli()
     if mode == "auto":
         path, binary = download_latest_binary()
@@ -585,7 +594,7 @@ def build_and_flash(mode, do_flash, ask_port, ask_target):
             ports = serial_ports(cli)
             if not ports:
                 raise RuntimeError("No serial ESP32 port found. The SD-card drive is not a flash port.")
-            port = ask_port(ports)
+            port = selected_port or ask_port(ports)
             if not port:
                 raise Cancelled()
             flash_binary(cli, binary, port, os.path.basename(path))
@@ -615,7 +624,7 @@ def build_and_flash(mode, do_flash, ask_port, ask_target):
     target = ask_target(sketches, FLASH_SKETCH if mode == "beta" else sketches[0])
     if not target:
         raise Cancelled()
-    port = ask_port(ports)
+    port = selected_port or ask_port(ports)
     if not port:
         raise Cancelled()
     sk = target
@@ -627,7 +636,7 @@ def build_and_flash(mode, do_flash, ask_port, ask_target):
 # ------------------------------------------------------------------ the whole job
 def work(opts, ask_port, ask_target):
     try:
-        drive, mode, do_dl, do_fl, update_only, manual = opts
+        drive, mode, do_dl, do_fl, update_only, manual, selected_port = opts
         n = m = 0
         inos = []
         if mode in ("beta", "manual") or do_dl:
@@ -650,10 +659,10 @@ def work(opts, ask_port, ask_target):
         if mode == "auto" and not do_dl:
             prog(20, "Finding newest compiled firmware...")
         if do_fl or mode == "auto":
-            msg, _ = build_and_flash(mode, do_fl, ask_port, ask_target)
+            msg, _ = build_and_flash(mode, do_fl, ask_port, ask_target, selected_port)
             S.summary.append(msg)
         elif mode in ("beta", "manual"):
-            msg, _ = build_and_flash(mode, False, ask_port, ask_target)
+            msg, _ = build_and_flash(mode, False, ask_port, ask_target, selected_port)
             S.summary.append(msg)
         prog(100, "Done")
     except Cancelled:
@@ -669,7 +678,7 @@ def main():
     update_only = "update" in [a.lower() for a in sys.argv[1:]]
     root = tk.Tk()
     root.title("Clock Setup")
-    root.geometry("500x410")
+    root.geometry("560x500")
     root.resizable(False, False)
     root.attributes("-topmost", True)
     pad = {"padx": 16}
@@ -688,7 +697,7 @@ def main():
     def info():
         messagebox.showinfo("Clock setup modes",
             "Auto (recommended): downloads and flashes the newest .bin from GitHub. It does not compile source.\n\n"
-            "Beta (unstable): downloads the newest raw .ino/.h files from GitHub, compiles every newest sketch, and can flash the resulting application.\n\n"
+            "Beta (unstable): downloads the newest raw update .ino/.h files from GitHub, compiles the application only, and can flash it.\n\n"
             "Manual: choose a folder containing the .ino and .h files you want to compile. It can compile all selected sketches and flash the selected result. Verify the folder before continuing.",
             parent=root)
     ttk.Button(modes, text="Info", command=info).pack(side="left", padx=(12, 0))
@@ -714,6 +723,39 @@ def main():
     v_fl = tk.BooleanVar(value=True)
     ttk.Checkbutton(root, text="Install source and weather icons to selected SD card", variable=v_dl).pack(anchor="w", **pad)
     ttk.Checkbutton(root, text="Flash ESP32 after download/build", variable=v_fl).pack(anchor="w", **pad)
+
+    ttk.Label(root, text="Flash device (serial ESP32 port)").pack(anchor="w", pady=(10, 2), **pad)
+    device_var = tk.StringVar(value="Auto-detect at Start")
+    device_combo = ttk.Combobox(root, textvariable=device_var,
+                                values=["Auto-detect at Start"], state="readonly", width=66)
+    device_combo.pack(anchor="w", **pad)
+    device_hint = ttk.Label(root, text="SD-card drive letters are excluded.", foreground="#666")
+    device_hint.pack(anchor="w", **pad)
+    device_ports = {}
+
+    def refresh_devices():
+        device_hint["text"] = "Detecting ESP32 serial devices..."
+        def detect():
+            try:
+                found = serial_ports(find_cli())
+                def update():
+                    device_ports.clear()
+                    values = ["Auto-detect at Start"]
+                    for address, board in found:
+                        label = "%s — %s" % (address, board)
+                        values.append(label)
+                        device_ports[label] = address
+                    device_combo["values"] = values
+                    device_var.set(values[0])
+                    device_hint["text"] = "%d ESP32 serial device(s) found." % len(found)
+                root.after(0, update)
+            except Exception as exc:
+                error_text = str(exc)
+                root.after(0, lambda: device_hint.configure(text="Device detection failed: %s" % error_text))
+        threading.Thread(target=detect, daemon=True).start()
+
+    ttk.Button(root, text="Refresh flash devices", command=refresh_devices).pack(anchor="e", padx=16, pady=(2, 4))
+    root.after(300, refresh_devices)
 
     status = ttk.Label(root, text="READY", anchor="center", relief="sunken")
     status.pack(fill="x", padx=16, pady=(14, 4))
@@ -760,6 +802,7 @@ def main():
     def go():
         selected_mode = mode.get()
         do_dl, do_fl = v_dl.get(), v_fl.get()
+        selected_port = device_ports.get(device_var.get())
         drive = None
         if do_dl:
             i = combo.current()
@@ -799,7 +842,8 @@ def main():
             do_fl = False
         start.state(["disabled"])
         combo.state(["disabled"])
-        threading.Thread(target=work, args=((drive, selected_mode, do_dl, do_fl, update_only, manual),
+        device_combo.state(["disabled"])
+        threading.Thread(target=work, args=((drive, selected_mode, do_dl, do_fl, update_only, manual, selected_port),
                                             ask_port,
                                             lambda sketches, default: ask_sketch(sketches, root, default)),
                          daemon=True).start()

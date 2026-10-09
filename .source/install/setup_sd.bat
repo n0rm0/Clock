@@ -1,54 +1,44 @@
 @echo off
+if /I not "%~1"=="--clock-hidden" (
+    set "VBS=%TEMP%\clock_setup_%RANDOM%.vbs"
+    >"%VBS%" echo Set sh = CreateObject("WScript.Shell")
+    >>"%VBS%" echo sh.Run "cmd.exe /d /c ""%~f0"" --clock-hidden", 0, False
+    wscript.exe //nologo "%VBS%" >nul 2>&1
+    del "%VBS%" >nul 2>&1
+    exit /b 0
+)
+shift /1
 setlocal EnableExtensions
-REM Clock SD installer launcher.
-REM Downloads .source/install/install.py from GitHub and runs it.
-REM If Python is missing, installs the user-scoped Python 3 package with winget.
 
 set "PY="
-where py.exe >nul 2>nul && set "PY=py.exe -3"
-if not defined PY where python.exe >nul 2>nul && set "PY=python.exe"
+for /f "delims=" %%P in ('where pyw.exe 2^>nul') do if not defined PY set "PY=%%P"
+if not defined PY for /f "delims=" %%P in ('where pythonw.exe 2^>nul') do if not defined PY set "PY=%%P"
 
 if not defined PY (
-    where winget.exe >nul 2>nul
-    if errorlevel 1 (
-        echo Python is not installed and winget is unavailable.
-        echo Install Python 3 from https://www.python.org/downloads/ and run this again.
-        pause
-        exit /b 1
-    )
-    echo Installing Python 3 for the current user...
-    winget install --id Python.Python.3.12 -e --scope user --silent --accept-package-agreements --accept-source-agreements
-    if errorlevel 1 (
-        echo Python installation failed.
-        pause
-        exit /b 1
-    )
-    where py.exe >nul 2>nul && set "PY=py.exe -3"
-    if not defined PY where python.exe >nul 2>nul && set "PY=python.exe"
+    where winget.exe >nul 2>&1
+    if errorlevel 1 goto :python_error
+    winget install --id Python.Python.3.12 -e --scope user --silent --accept-package-agreements --accept-source-agreements >nul 2>&1
+    for /f "delims=" %%P in ('where pyw.exe 2^>nul') do if not defined PY set "PY=%%P"
+    if not defined PY for /f "delims=" %%P in ('where pythonw.exe 2^>nul') do if not defined PY set "PY=%%P"
+    if not defined PY if exist "%LOCALAPPDATA%\Programs\Python\Python312\pythonw.exe" set "PY=%LOCALAPPDATA%\Programs\Python\Python312\pythonw.exe"
 )
-
-if not defined PY (
-    echo Python was installed but could not be found on PATH yet.
-    echo Open a new Command Prompt and run setup_sd.bat again.
-    pause
-    exit /b 1
-)
+if not defined PY goto :python_error
 
 set "PYFILE=%TEMP%\clock_install_%RANDOM%%RANDOM%.py"
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "try { Invoke-WebRequest -UseBasicParsing -Uri ('https://raw.githubusercontent.com/n0rm0/Clock/main/.source/install/install.py?t=' + [guid]::NewGuid()) -OutFile '%PYFILE%' } catch { exit 1 }"
-if errorlevel 1 (
-    echo Could not download .source/install/install.py from GitHub.
-    del "%PYFILE%" >nul 2>nul
-    pause
-    exit /b 1
-)
-if not exist "%PYFILE%" (
-    echo The installer download did not produce a file.
-    pause
-    exit /b 1
-)
+powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command "try { Invoke-WebRequest -UseBasicParsing -Uri ('https://raw.githubusercontent.com/n0rm0/Clock/main/.source/install/install.py?t=' + [guid]::NewGuid()) -OutFile '%PYFILE%' } catch { exit 1 }" >nul 2>&1
+if errorlevel 1 goto :download_error
+if not exist "%PYFILE%" goto :download_error
 
-%PY% "%PYFILE%" %*
+start "" /wait "%PY%" "%PYFILE%" %*
 set "RESULT=%ERRORLEVEL%"
-del "%PYFILE%" >nul 2>nul
+del "%PYFILE%" >nul 2>&1
 exit /b %RESULT%
+
+:python_error
+powershell.exe -NoProfile -WindowStyle Hidden -Command "Add-Type -AssemblyName PresentationFramework; [void][System.Windows.MessageBox]::Show('Python 3 with Tkinter could not be found or installed.','Clock Setup')" >nul 2>&1
+exit /b 1
+
+:download_error
+del "%PYFILE%" >nul 2>&1
+powershell.exe -NoProfile -WindowStyle Hidden -Command "Add-Type -AssemblyName PresentationFramework; [void][System.Windows.MessageBox]::Show('Could not download the Clock installer from GitHub.','Clock Setup')" >nul 2>&1
+exit /b 1
