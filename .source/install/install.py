@@ -244,6 +244,39 @@ def workspace():
     return os.path.join(docs if os.path.isdir(docs) else os.path.expanduser("~"), "ClockSource")
 
 
+def oauth_json_candidates():
+    """Find likely Google OAuth client JSON files without scanning the whole computer."""
+    home = os.path.expanduser("~")
+    roots = [os.path.join(home, name) for name in ("Downloads", "Documents", "Desktop")]
+    roots += [os.getcwd()]
+    found, seen = [], set()
+    for root in roots:
+        if not os.path.isdir(root):
+            continue
+        for current, dirs, files in os.walk(root):
+            depth = os.path.relpath(current, root).count(os.sep)
+            if depth >= 3:
+                dirs[:] = []
+            for name in files:
+                if not name.lower().endswith(".json"):
+                    continue
+                path = os.path.abspath(os.path.join(current, name))
+                if path in seen:
+                    continue
+                seen.add(path)
+                try:
+                    if os.path.getsize(path) > 2 * 1024 * 1024:
+                        continue
+                    with open(path, encoding="utf-8") as f:
+                        data = json.load(f)
+                    block = data.get("installed") or data.get("web")
+                    if isinstance(block, dict) and block.get("client_id") and block.get("client_secret"):
+                        found.append(path)
+                except (OSError, ValueError, TypeError):
+                    continue
+    return found
+
+
 def get_source(manual=None):
     """GitHub files + Downloads -> <Documents>/ClockSource/<name>/<name>.ino. Returns (github, moved, inos).
     manual = list of files you picked by hand: GitHub and Downloads are skipped; the picked files
@@ -827,6 +860,20 @@ def main():
             classroom_path["value"] = path
             classroom_label.configure(text=os.path.basename(path))
             classroom_var.set(True)
+
+    def suggest_oauth_json():
+        if classroom_path["value"]:
+            return
+        for path in oauth_json_candidates():
+            if messagebox.askyesno("Google Classroom OAuth",
+                                   "Is this the Google OAuth secrets file for Clock?\n\n%s\n\n"
+                                   "Choose Yes only if you recognize this file." % path,
+                                   parent=root):
+                classroom_path["value"] = path
+                classroom_label.configure(text=os.path.basename(path))
+                classroom_var.set(True)
+                break
+
     ttk.Button(classroom_row, text="Choose OAuth JSON", command=choose_classroom_json).pack(side="right")
     ttk.Label(root, text="Sign in happens before the SD card is erased or firmware is installed.",
               foreground="#666").pack(anchor="w", **pad)
@@ -864,6 +911,7 @@ def main():
 
     ttk.Button(root, text="Refresh flash devices", command=refresh_devices).pack(anchor="e", padx=16, pady=(2, 4))
     root.after(300, refresh_devices)
+    root.after(600, suggest_oauth_json)
 
     status = ttk.Label(root, text="READY", anchor="center", relief="sunken")
     status.pack(fill="x", padx=16, pady=(14, 4))

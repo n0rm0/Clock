@@ -122,3 +122,4 @@ This checklist reflects the requirements in [`agent.md`](agent.md) and the files
 - [x] Refresh the cached assignment display every second; Google sync itself runs during installer authorization rather than once per second.
 - [x] Sleep the display after one minute of inactivity and wake it with a touch.
 - [x] Add a two-tap factory reset that clears local settings, Wi-Fi, Classroom tokens, and cached Classroom data.
+- [x] Search common user folders for OAuth-shaped JSON files and ask for confirmation before auto-selecting one.
