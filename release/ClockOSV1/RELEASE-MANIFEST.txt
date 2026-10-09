@@ -1,0 +1,6 @@
+ClockOSV1
+Release channel: V1
+Firmware: .source/compiled/updates/updateV1/ClockOSV1.bin (release identity ClockOSV1)
+Windows launchers: x64, x86, ARM64 (architecture-independent VBS)
+macOS runner: .command
+Portable package: portable.zip

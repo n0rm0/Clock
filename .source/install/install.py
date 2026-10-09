@@ -10,7 +10,7 @@ Rufus-style window: pick the SD card, then three checkboxes (all ON by default):
   Classroom notifications    - authorize before the wipe, then save read-only cache/tokens under /.source/data/secrets
 When it finishes the window closes by itself.
 
-Source code is kept in  <Documents>\\ClockSource\\<name>\\<name>.ino  so you can edit it.
+Source code is kept in  <Documents>\\ClockOSV1\\<name>\\<name>.ino  so you can edit it.
 Files in your Downloads (.ino / .h) are MOVED there (never copied).
 "python install.py update" = refresh the SD card from GitHub only (no wipe, no icons).
 """
@@ -20,7 +20,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog, filedialog
 
 OWNER, REPO, BRANCH = "n0rm0", "Clock", "main"
-PRODUCT_NAME, PRODUCT_VERSION = "ClockOS", "3.1"
+PRODUCT_NAME, PRODUCT_VERSION = "ClockOSV1", "V1"
 SOURCE_ROOT = ".source/uncompiled/updates"
 UA = {"User-Agent": "clock-installer"}
 ICON_BASE = "https://raw.githubusercontent.com/basmilius/weather-icons/dev/production/fill"
@@ -263,7 +263,7 @@ def remove_stale_sketches(dest, current_inos):
 
 def workspace():
     docs = os.path.join(os.path.expanduser("~"), "Documents")
-    return os.path.join(docs if os.path.isdir(docs) else os.path.expanduser("~"), "ClockSource")
+    return os.path.join(docs if os.path.isdir(docs) else os.path.expanduser("~"), "ClockOSV1")
 
 
 def oauth_json_candidates():
@@ -300,9 +300,9 @@ def oauth_json_candidates():
 
 
 def get_source(manual=None):
-    """GitHub files + Downloads -> <Documents>/ClockSource/<name>/<name>.ino. Returns (github, moved, inos).
+    """GitHub files + Downloads -> <Documents>/ClockOSV1/<name>/<name>.ino. Returns (github, moved, inos).
     manual = list of files you picked by hand: GitHub and Downloads are skipped; the picked files
-    are MOVED into ClockSource (anything else already there stays)."""
+    are MOVED into ClockOSV1 (anything else already there stays)."""
     ws = workspace()
     stage = tempfile.mkdtemp(prefix="clock_stage_")
     try:
@@ -344,7 +344,7 @@ def check_files(picked, need_update):
                 continue
             for f in fs:
                 have.setdefault(f.lower(), os.path.join(root, f))
-    for p in picked:                            # picked files win over what is already in ClockSource
+    for p in picked:                            # picked files win over what is already in ClockOSV1
         have[os.path.basename(p).lower()] = p
     inos = sorted(n for n in have if n.endswith(".ino"))
     problems = []

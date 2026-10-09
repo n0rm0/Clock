@@ -68,24 +68,24 @@ This checklist reflects the requirements in [`agent.md`](agent.md) and the files
 - [x] Inspected the imported Arduino, Python, batch, and documentation files.
 - [x] Checked `.source/` and confirmed it has separate `uncompiled/` and `compiled/` areas.
 - [x] Performed a static source review and Python syntax check.
-- [x] Confirm the compiled ClockOS 2.1 `.bin` is a real Arduino CLI build artifact.
+- [x] Confirm the compiled ClockOSV1 `.bin` is a real Arduino CLI build artifact.
 
 ### Bugs found
 
 - **Resolved blocker:** `updateV1.ino` now has the required `bootloader.h` module.
-- **Resolved blocker:** a verified ClockOS 2.1 binary is now present in the compiled update slot.
+- **Resolved blocker:** a verified ClockOSV1 binary is now present in the compiled update slot.
 - **Installer-managed asset:** weather icons are downloaded to the SD card by the Windows setup tool.
 
 ### Open bugs and blockers
 
 - [x] **Resolved layout blocker:** `.source/` now has matching versioned `uncompiled/` and `compiled/` trees.
 - [x] **Resolved implementation blocker:** the OTA bootloader module and same-name fallback sketch are present.
-- [x] **Successful build:** ClockOS 2.1 compiles with Arduino CLI, ESP32 core 2.0.17, and the required libraries.
+- [x] **Successful build:** ClockOSV1 compiles with Arduino CLI, ESP32 core 2.0.17, and the required libraries.
 - [ ] **Hardware configuration unverified:** display and peripheral pin mappings, display inversion/color order, and library settings still require authoritative documentation and hardware testing.
 - [ ] **Update behavior hardware test:** OTA partition compatibility and rollback handling are implemented and compiled, but still require physical-device testing.
 - [ ] **Installer behavior untested:** Windows mode selection, Python bootstrap, serial-port upload, file-preservation behavior, download failures, and icon installation still need Windows testing.
 
-> **Current status:** ClockOS 2.1 source, compiled update, SD JSON preferences, updater UI, and installer paths are implemented. Windows installer execution and physical hardware validation remain open.
+> **Current status:** ClockOSV1 source, compiled update, SD JSON preferences, updater UI, and installer paths are implemented. Windows installer execution and physical hardware validation remain open.
 
 ## Deferred installer follow-up
 
@@ -127,11 +127,11 @@ This checklist reflects the requirements in [`agent.md`](agent.md) and the files
 ## Tomorrow's follow-up
 
 - [x] Fix Windows installer dependency bootstrap: package installation now uses `python.exe` paired with `pythonw.exe` and verifies imports afterward.
-- [x] Finish the Arduino CLI build with ESP32 2.0.17 after the `clockAlarm` rename; ClockOS 2.1 builds cleanly.
-- [x] Copy the verified ClockOS 2.1 binary into `.source/compiled/updates/updateV1/` for Auto mode.
+- [x] Finish the Arduino CLI build with ESP32 2.0.17 after the `clockAlarm` rename; ClockOSV1 builds cleanly.
+- [x] Copy the verified ClockOSV1 binary into `.source/compiled/updates/updateV1/` for Auto mode.
 - [x] Store settings, Wi-Fi, alarm, and touch preferences as JSON under `/data/preferences/` only when a valid ClockOS SD card is present.
 - [x] Show filled, outline, or X-marked SD-card status and warn on Settings exit when changes cannot be saved.
-- [x] Upgrade the release identity to ClockOS 3.1 with one-time first-run setup, Wi-Fi on/off choice, Classroom toggle, Main/Side sync role, Apple-style Settings rows, profile silhouette, swipe-back navigation, multi-network JSON storage, and sync-version compatibility warnings.
+- [x] Upgrade the release identity to ClockOSV1 with one-time first-run setup, Wi-Fi on/off choice, Classroom toggle, Main/Side sync role, Apple-style Settings rows, profile silhouette, swipe-back navigation, multi-network JSON storage, and sync-version compatibility warnings.
 - [x] Preserve SD-card JSON files during installer wipes and store the OAuth client as `/data/secrets/classroomsecret.json`.
 - [x] Add the Apple-style Appearance tab with Crystal, Midnight, Ocean, Sunrise, and Graphite theme packages under `.source/themes/appearance/`; persist the selected theme and install the catalog to the SD card.
 - [ ] Test the updated `.bat` on Windows: OAuth JSON auto-detection, school-account sign-in, SD-card secret/cache placement, flashing, and headless launcher behavior.

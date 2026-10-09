@@ -2,7 +2,7 @@
 
 ESP32 clock project for the Hosyond 4-inch ESP32-32E display.
 
-The current firmware iteration is **ClockOS 3.1**. The Arduino compatibility
+The current firmware iteration is **ClockOSV1**. The Arduino compatibility
 folder remains `updateV1` so existing SD-card and installer workflows continue
 to work; release binaries are versioned as ClockOS artifacts inside that slot.
 
@@ -12,7 +12,7 @@ Raw source and compiled firmware use matching versioned paths. Each Arduino sket
 
 ```text
 .source/
-├── compiled/                 # only .bin files; currently no binaries supplied
+├── compiled/                 # only verified .bin files
 │   ├── bootloader/fallback/bootloaderV1/
 │   └── updates/updateV1/
 ├── install/                  # GitHub-downloaded launcher and installer
@@ -39,7 +39,7 @@ When flashing a compiled sketch, the installer shows a visible **Flash device** 
 
 Raw sketches installed to an SD card are placed under `.source/uncompiled/updates/<version>/` or `.source/uncompiled/bootloader/fallback/<version>/`; no root-level `updateV1` folder or `extras` folder is created.
 
-The compiled tree must contain only real `.bin` files. The ClockOS 2.1 binary is
+The compiled tree must contain only real `.bin` files. The ClockOSV1 binary is
 added only after a successful Arduino CLI build. See [.agent/todo.md](.agent/todo.md)
 for validation items.
 
@@ -61,7 +61,7 @@ settings, show capacity/used space, and open a read-only root file viewer.
 The prepare action does not erase unrelated files; weather icons are installed
 by the Windows setup tool.
 
-ClockOS 3.1 also includes an **Appearance** tab in Settings. Built-in theme
+ClockOSV1 also includes an **Appearance** tab in Settings. Built-in theme
 packages live under `.source/themes/appearance/` and are installed to the same
 location on the SD card. The initial catalog includes **Crystal**, **Midnight**,
 **Ocean**, **Sunrise**, and **Graphite**. Each theme is a small versioned JSON
@@ -81,7 +81,7 @@ its hidden path and shows only the ClockOS Setup dialog. It works both beside
 `setup_sd.bat` and when downloaded by itself: if the batch is not beside it,
 the VBScript quietly downloads the signed repository copy first.
 
-ClockOS 3.1 uses a one-time Apple-style setup flow after a fresh install or
+ClockOSV1 uses a one-time Apple-style setup flow after a fresh install or
 Factory Reset. It asks whether Wi-Fi should be enabled, whether Google
 Classroom should be enabled, and whether the display is a **Main** or **Side**
 device for display synchronization. Up to five Wi-Fi networks are stored in

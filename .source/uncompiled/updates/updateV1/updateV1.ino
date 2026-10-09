@@ -60,14 +60,14 @@ void applyAppearanceTheme() {
   UI_RED = C(255, 60, 60); UI_YEL = C(255, 230, 0); UI_GREEN = C(173, 255, 47);
 }
 
-enum Screen { S_WELCOME, S_SCAN, S_KEYS, S_HOME, S_ALARM, S_CLOCK, S_SETTINGS, S_WIFI, S_WEATHER, S_CALENDAR, S_UPDATE, S_SDCARD, S_SDFILES, S_PROFILE, S_APPEARANCE };
+enum Screen { S_WELCOME, S_SCAN, S_KEYS, S_HOME, S_ALARM, S_CLOCK, S_SETTINGS, S_WIFI, S_WEATHER, S_CALENDAR, S_UPDATE, S_SDCARD, S_SDFILES, S_PROFILE, S_APPEARANCE, S_DEV_PIN, S_DEV_MODE };
 Screen screen = S_WELCOME;
 
 // ClockOS release identity. The sketch folder remains updateV1 for installer
-// compatibility, while the firmware/update feed is now ClockOS 3.1.
+// compatibility, while the firmware/update feed is now ClockOSV1.
 static const char* CLOCKOS_NAME = "ClockOS";
-static const char* CLOCKOS_VERSION = "3.1";
-static const char* SYNC_PROTOCOL_VERSION = "3.1";
+static const char* CLOCKOS_VERSION = "V1";
+static const char* SYNC_PROTOCOL_VERSION = "1.0";
 String syncPeerVersion = "";
 
 bool syncVersionCompatible(const String& peer) {
@@ -103,6 +103,10 @@ bool screenSleeping = false;
 bool factoryResetArmed = false;
 uint32_t lastActivity = 0;
 bool swipeBackDetected = false;
+uint8_t versionTapCount = 0;
+uint32_t versionTapWindow = 0;
+String developerPinInput = "";
+bool developerModeUnlocked = false;
 
 // ====================================================================
 //  text helper (GFX free fonts)
@@ -1215,6 +1219,30 @@ void showAppearancePage() {
   txt(F12, C(85, 88, 98), TC_DATUM, "More themes can be added to /themes/appearance.", 240, 266);
 }
 
+void showDeveloperPinPage() {
+  screen = S_DEV_PIN; developerPinInput = ""; drawBackHeader("Developer Mode");
+  txt(F18B, C(25, 26, 32), TC_DATUM, "Enter developer PIN", 240, 62);
+  txt(F18B, C(0, 122, 255), TC_DATUM, "****", 240, 92);
+  const char* keys[] = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "Clear", "0", "Enter"};
+  for (int i = 0; i < 12; i++) {
+    int col = i % 3, row = i / 3;
+    alarmButton(45 + col * 145, 112 + row * 42, 125, keys[i], i == 11);
+  }
+}
+
+void showDeveloperModePage() {
+  screen = S_DEV_MODE; drawBackHeader("Developer Mode");
+  tft.fillRoundRect(28, 48, 424, 48, 14, C(220, 250, 228));
+  txt(F12B, C(18, 110, 48), TC_DATUM, "Congrats, you got in to dev mode!", 240, 72);
+  settingsRow(14, 110, "USB debugging", "Enabled", true);
+  settingsRow(256, 110, "ClockOS version", CLOCKOS_VERSION, false);
+  alarmButton(14, 166, 210, "Revert software");
+  alarmButton(256, 166, 210, "Recovery tools");
+  txt(F12, C(85, 88, 98), TC_DATUM, "Developer features can affect stability.", 240, 238);
+  txt(F12, C(85, 88, 98), TC_DATUM, "USB Serial logging is enabled while this page is open.", 240, 260);
+  Serial.setDebugOutput(true);
+}
+
 void drawBackHeader(const String& title) {
   tft.fillScreen(UI_BACK);
   alarmButton(8, 8, 78, "Back");
@@ -1244,8 +1272,7 @@ void showSettingsPage() {
   settingsRow(256, 226, "Weather settings", ">", false);
   settingsRow(14, 266, "Appearance", appearanceTheme, true);
   settingsRow(256, 266, "Factory Reset", factoryResetArmed ? "Tap again" : ">", factoryResetArmed);
-  alarmButton(120, 266, 240, factoryResetArmed ? "Tap again to reset" : "Factory reset", factoryResetArmed);
-  txt(F12, 0x0000, TC_DATUM, "Orientation: permanent 180 degrees", 240, 311);
+  txt(F12, C(95, 98, 110), TC_DATUM, String("ClockOS ") + CLOCKOS_VERSION, 240, 310);
 }
 
 void drawAppleUpdateIcon(int cx, int cy, uint16_t blue) {
@@ -1559,6 +1586,13 @@ void loop() {
       else return;
       firstSetupSync = false; settings.setupComplete = true; saveSettings(); showHome(); return;
     }
+    if (y >= 298) {
+      uint32_t now = millis();
+      if (now - versionTapWindow > 2200) versionTapCount = 0;
+      versionTapWindow = now; versionTapCount++;
+      if (versionTapCount >= 5) { versionTapCount = 0; showDeveloperPinPage(); }
+      return;
+    }
     if (x < 100 && y < 45) { leaveSettingsPage(); return; }
     if (x >= 400 && y < 50) { showSdCardPage(); return; }
     if (y >= 50 && y < 84 && x < 240) settings.offline = !settings.offline;
@@ -1603,6 +1637,28 @@ void loop() {
       if (x >= bx && x < bx + 210 && y >= by && y < by + 34) {
         appearanceTheme = ids[i]; applyAppearanceTheme(); saveSettings(); showAppearancePage(); return;
       }
+    }
+  } else if (screen == S_DEV_PIN) {
+    if (!readTouch(x, y)) return;
+    if (swipeBackDetected || (x < 100 && y < 45)) { swipeBackDetected = false; showSettingsPage(); return; }
+    int col = (x - 45) / 145, row = (y - 112) / 42;
+    if (col < 0 || col > 2 || row < 0 || row > 3) return;
+    int key = row * 3 + col;
+    if (key < 9 && developerPinInput.length() < 4) developerPinInput += String(key + 1);
+    else if (key == 9) developerPinInput = "";
+    else if (key == 10 && developerPinInput.length() < 4) developerPinInput += "0";
+    else if (key == 11) {
+      if (developerPinInput == "0000") { developerModeUnlocked = true; showDeveloperModePage(); return; }
+      developerPinInput = "";
+    }
+    showDeveloperPinPage();
+  } else if (screen == S_DEV_MODE) {
+    if (!readTouch(x, y)) return;
+    if (swipeBackDetected || (x < 100 && y < 45)) { swipeBackDetected = false; showSettingsPage(); return; }
+    if (y >= 166 && y < 215 && x < 240) {
+      drawUpdatePage(0, "Rollback is available only with a signed recovery image.");
+    } else if (y >= 166 && y < 215 && x >= 240) {
+      drawUpdatePage(0, "Recovery tools ready. No changes were made.");
     }
   } else if (screen == S_WIFI) {
     if (!readTouch(x, y)) return;
