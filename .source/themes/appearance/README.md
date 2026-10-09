@@ -1,6 +1,6 @@
 # ClockOS Appearance Themes
 
-Built-in appearance packages for ClockOS 3.1. Each theme is a small JSON file so future releases can add themes without changing the SD-card layout.
+Built-in appearance packages for ClockOSV1. Each theme is a small JSON file so future releases can add themes without changing the SD-card layout.
 
 Install location on the SD card:
 
