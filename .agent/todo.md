@@ -24,13 +24,13 @@ This checklist reflects the requirements in [`agent.md`](agent.md) and the files
 - [x] Add SD-card weather-icon loading from `.source/icons/`.
 - [ ] Confirm the Hosyond 4-inch ESP32-32E/ST7796S pin map against authoritative board documentation.
 - [ ] Confirm the display library, board package, selected board, and required library versions.
-- [ ] Build the firmware and resolve all compiler errors from actual compiler output.
+- [x] Build the firmware and resolve all compiler errors from actual compiler output.
 - [ ] Validate the display, SD card, Wi-Fi/weather data, and sensors on physical hardware.
 
 ## SD-card and update layout
 
 - [x] Create matching versioned trees under `.source/uncompiled/` and `.source/compiled/`.
-- [x] Keep the compiled update and V1 fallback slots empty of firmware until builds pass; compiled may contain only `.bin` files.
+- [x] Keep compiled slots limited to real `.bin` files, adding firmware only after a successful build.
 - [x] Configure the clock to check `.source/compiled/updates/` for newer updates.
 - [x] Add installer-generated SD-card folders, including `/data/preferences/` for JSON preferences and `.source/icons/`.
 - [x] Add the bootloader/update implementation and matching fallback source slot.
@@ -57,8 +57,8 @@ This checklist reflects the requirements in [`agent.md`](agent.md) and the files
 ## Documentation and delivery
 
 - [x] Update `README.md` with the current source/compiled layout and known build limitation.
-- [ ] Keep commits focused and describe the validation performed.
-- [ ] Update this checklist only when work is genuinely complete.
+- [x] Keep commits focused and describe the validation performed.
+- [x] Update this checklist only when work is genuinely complete.
 
 ## Code and bug check — 2026-10-07
 
@@ -103,7 +103,7 @@ This checklist reflects the requirements in [`agent.md`](agent.md) and the files
 - [x] Fix the clock sketch's Arduino `Key` prototype and PNGdec callback compile errors shown by the Windows build.
 - [x] Set the clock display rotation to 180 degrees (`TFT_ROTATION 3`).
 - [x] Add a standalone raw-touch coordinate sketch; final touch mapping remains pending the user's Serial Monitor readings.
-- [x] Hardwire the latest official TFT_eSPI touch calibration `{365, 3431, 321, 3368, 7}` for the 180-degree display orientation.
+- [x] Hardwire the previous TFT_eSPI touch calibration `{365, 3431, 321, 3368, 7}` for the earlier display orientation.
 - [x] Add Wi-Fi IP-based local weather lookup with Open-Meteo current conditions.
 - [x] Add weather icon fallback drawing when SD PNG assets are unavailable.
 - [x] Align compact Wi-Fi/battery indicators and add the next-alarm row below the time.
@@ -135,3 +135,14 @@ This checklist reflects the requirements in [`agent.md`](agent.md) and the files
 - [x] Preserve SD-card JSON files during installer wipes and store the OAuth client as `/data/secrets/classroomsecret.json`.
 - [x] Add the Apple-style Appearance tab with Crystal, Midnight, Ocean, Sunrise, and Graphite theme packages under `.source/themes/appearance/`; persist the selected theme and install the catalog to the SD card.
 - [ ] Test the updated `.bat` on Windows: OAuth JSON auto-detection, school-account sign-in, SD-card secret/cache placement, flashing, and headless launcher behavior.
+
+## Deferred ClockOSV1/V2.5 release and UI work
+
+- [ ] Integrate and validate the user's corrected TFT display-orientation code when the corrected source is available; confirm the physical rotation and touch mapping on the Hosyond display.
+- [ ] Replace the previous touch calibration with the newly supplied calibration `{343, 3436, 266, 3381, 1}` using `tft.setTouch(calData);`, then validate all four corners and center on the corrected orientation.
+- [ ] Rename the public Arduino application identity from `updateV1` to `ClockOSV1` without breaking Arduino IDE same-name sketch rules, SD update discovery, or the fallback bootloader path.
+- [ ] Define and apply the release increment policy: small fixes increment by `+0.1`, major feature releases increment by `+1`, and compiled/uncompiled folders, firmware identity, installer labels, and update metadata stay synchronized.
+- [ ] Create and compile the next firmware release as `ClockOSv2.5.bin` and publish matching uncompiled source under a same-name `ClockOSv2.5/` sketch folder after the version policy is confirmed.
+- [ ] Add a clock icon to the Tkinter window title bar and verify it works on Windows 10 and Windows 11 without briefly opening a console.
+- [ ] Redesign the Tkinter installer window to be smaller, cleaner, and more Apple-like: reduce oversized text, use a restrained neutral palette, and move primary actions into a tidy sidebar.
+- [ ] Keep the current ClockOSV1 release stable while the V2.5 source, binary, installer UI, and release assets are implemented and tested.
