@@ -139,7 +139,8 @@ This checklist reflects the requirements in [`agent.md`](agent.md) and the files
 ## Deferred ClockOSV1/V2.5 release and UI work
 
 - [ ] Integrate and validate the user's corrected TFT display-orientation code when the corrected source is available; confirm the physical rotation and touch mapping on the Hosyond display.
-- [ ] Replace the previous touch calibration with the newly supplied calibration `{343, 3436, 266, 3381, 1}` using `tft.setTouch(calData);`, then validate all four corners and center on the corrected orientation.
+- [x] Replace the previous touch calibration with the newly supplied calibration `{343, 3436, 266, 3381, 1}` using `tft.setTouch(calData);` and compile the firmware successfully.
+- [ ] Validate the new calibration on the physical Hosyond display at all four corners and the center after confirming the corrected orientation.
 - [ ] Rename the public Arduino application identity from `updateV1` to `ClockOSV1` without breaking Arduino IDE same-name sketch rules, SD update discovery, or the fallback bootloader path.
 - [ ] Define and apply the release increment policy: small fixes increment by `+0.1`, major feature releases increment by `+1`, and compiled/uncompiled folders, firmware identity, installer labels, and update metadata stay synchronized.
 - [ ] Create and compile the next firmware release as `ClockOSv2.5.bin` and publish matching uncompiled source under a same-name `ClockOSv2.5/` sketch folder after the version policy is confirmed.
