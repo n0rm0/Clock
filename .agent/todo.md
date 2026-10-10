@@ -302,3 +302,20 @@ This checklist reflects the requirements in [`agent.md`](agent.md) and the files
 - [ ] Validate Windows installer DPI scaling and Start retry flow on Windows 10/11; no Windows GUI is available in this sandbox.
 
 > **Current status:** Source changes and the v2.8 ESP32 binary are built; all seven automated tests pass, and `esptool.py` confirms a valid image checksum/validation hash matching both manifests. Physical-device and native Windows UI checks remain open.
+
+## ClockOSv3.8 visual and interaction release — 2026-10-10
+
+- [x] Create the same-name `ClockOSv3.8/ClockOSv3.8.ino` source package with matching `config.h` and `bootloader.h`.
+- [x] Rebuild the home display as original dark bedside cards with a large segmented clock, next-alarm, date/time-format, weather, calendar, Wi-Fi, SD, battery, and Settings affordances.
+- [x] Rebuild Settings as a full-width grouped list with category summaries, touch-sized rows, clear hierarchy, selected-theme state, and larger switches.
+- [x] Apply the shared header, grouped-row, typography, and navigation treatment to Wi-Fi, Weather, Calendar, Storage, Alarms, Update, Factory Reset, Developer Mode, and first-run setup.
+- [x] Fix high-impact interaction defects: home-only painters no longer overwrite another screen, SD refresh does not redraw setup wizards, reset confirmation requires a release between taps, the Developer PIN keeps entered digits, calendar starts on the correct weekday, and wake paints Home before enabling the backlight.
+- [x] Harden weather PNG loading with real open/seek failure handling, scanline continuation, fixed bounds, and an original vector fallback.
+- [x] Build `ClockOSv3.8.bin` with Arduino CLI 1.5.2-rc.1, ESP32 core 2.0.17, TFT_eSPI 2.5.43, PNGdec 1.1.6, ArduinoJson 7.4.3, and the installer's exact TFT flags.
+- [x] Publish the matching compiled application, current/versioned manifests, SHA-256, build record, manifest-driven release tests, and current-release SD-layout parity test.
+- [x] Validate the application image with `esptool.py image_info`; checksum and validation hash are valid.
+- [x] Run the seven host-side regression tests, release integrity checks, source whitespace checks, and Git whitespace checks.
+- [ ] Validate v3.8 Home, Settings, touch targets, weather PNGs, SD status, sleep/wake, and OTA behavior on the physical Hosyond display.
+- [ ] Validate Windows 10/11 installer DPI scaling, launch behavior, and recovery/retry flow with the v3.8 release.
+
+> **Current status:** ClockOSv3.8 is the current compiled application artifact. It is build-validated, image-validated, and covered by the host-side regression checks. Physical-device and native Windows UI validation remain intentionally open.

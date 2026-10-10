@@ -12,7 +12,8 @@ The repository keeps raw editable files in `uncompiled/` and verified applicatio
 │       ├── ClockOSv2.5/ClockOSv2.5.bin
 │       ├── ClockOSv2.6/ClockOSv2.6.bin
 │       ├── ClockOSv2.7/ClockOSv2.7.bin
-│       └── ClockOSv2.8/ClockOSv2.8.bin
+│       ├── ClockOSv2.8/ClockOSv2.8.bin
+│       └── ClockOSv3.8/ClockOSv3.8.bin
 ├── install/
 │   ├── install.py
 │   └── setup_sd.bat
@@ -24,7 +25,8 @@ The repository keeps raw editable files in `uncompiled/` and verified applicatio
         ├── ClockOSv2.5/
         ├── ClockOSv2.6/
         ├── ClockOSv2.7/
-        └── ClockOSv2.8/
+        ├── ClockOSv2.8/
+        └── ClockOSv3.8/
 ```
 
-The installer recognizes legacy `updateV*` and current `ClockOSv*` application folders while excluding bootloader sketches from automatic selection. The compiled tree contains application `.bin` files only. Release identities and paths are defined in `.source/releases/current.json`; the exact v2.8 build record is `.source/releases/ClockOSv2.8.md`.
+The installer recognizes legacy `updateV*` and current `ClockOSv*` application folders while excluding bootloader sketches from automatic selection. The compiled tree contains application `.bin` files only. Release identities and paths are defined in `.source/releases/current.json`; the exact v3.8 build record is `.source/releases/ClockOSv3.8.md`.

@@ -93,15 +93,21 @@ class InstallerEraseAndReleaseTests(unittest.TestCase):
         manifest = json.loads((ROOT / ".source/releases/current.json").read_text(encoding="utf-8"))
         binary_path = ROOT / manifest["binaryPath"]
         image = binary_path.read_bytes()
-        self.assertEqual(manifest["displayVersion"], "v2.8")
+        sketch = manifest["sketch"]
+        firmware_identity = manifest["firmwareIdentity"]
+        raw_source = ROOT / manifest["rawSourcePath"]
+        self.assertEqual(raw_source.name, sketch)
+        self.assertTrue((raw_source / f"{sketch}.ino").is_file())
+        self.assertTrue((raw_source / "config.h").is_file())
+        self.assertTrue((raw_source / "bootloader.h").is_file())
         self.assertEqual(manifest["binaryBytes"], len(image))
         self.assertEqual(manifest["sha256"], hashlib.sha256(image).hexdigest())
-        firmware = (ROOT / manifest["rawSourcePath"] / "ClockOSv2.8.ino").read_text(encoding="utf-8")
-        self.assertIn('"v2.8"', firmware)
-        self.assertIn('"ClockOSv2.8"', firmware)
-        for marker in (b"Settings", b"General", b"Appearance", b"Storage", b"Factory Reset", b"Choose Network"):
+        firmware = (raw_source / f"{sketch}.ino").read_text(encoding="utf-8")
+        self.assertIn(f'"{manifest["displayVersion"]}"', firmware)
+        self.assertIn(f'"{firmware_identity}"', firmware)
+        for marker in (b"Settings", b"General", b"Appearance", b"Storage", b"Factory Reset", b"Choose network", b"No alarms set"):
             self.assertIn(marker, image)
-        self.assertEqual(binary_path.name, "ClockOSv2.8.bin")
+        self.assertEqual(binary_path.name, f"{sketch}.bin")
 
 
 if __name__ == "__main__":

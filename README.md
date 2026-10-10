@@ -2,12 +2,13 @@
 
 ESP32 clock project for the Hosyond 4-inch ESP32-32E display.
 
-**ClockOSV1** remains the stable legacy release. The canonical same-name
-`ClockOSV1/` source/binary alias is published alongside the preserved `updateV1`
-compatibility slot, so older SD-card and OTA paths keep working. **ClockOSv2.8** is the current compiled release candidate: it has a
-same-name Arduino sketch folder, matching raw-source tree, verified application
-binary, and release manifest. See [the release policy](.source/releases/README.md)
-before changing a version.
+**ClockOSV1** remains the preserved legacy release. The canonical same-name
+`ClockOSV1/` source/binary alias is published alongside the retained `updateV1`
+compatibility slot, so older SD-card and OTA paths keep working. **ClockOSv3.8**
+is the current compiled application release: it has a same-name Arduino sketch
+folder, matching raw-source tree, verified application binary, and release
+manifest. See [the release policy](.source/releases/README.md) before changing a
+version.
 
 ## Repository layout
 
@@ -23,7 +24,8 @@ Raw source and compiled firmware use matching versioned paths. Each Arduino sket
 │       ├── ClockOSv2.5/ClockOSv2.5.bin
 │       ├── ClockOSv2.6/ClockOSv2.6.bin
 │       ├── ClockOSv2.7/ClockOSv2.7.bin
-│       └── ClockOSv2.8/ClockOSv2.8.bin
+│       ├── ClockOSv2.8/ClockOSv2.8.bin
+│       └── ClockOSv3.8/ClockOSv3.8.bin
 ├── install/                  # GitHub-downloaded launcher and installer
 ├── touch_test/               # standalone raw-touch coordinate sketch
 │   └── touch_test.ino
@@ -36,7 +38,8 @@ Raw source and compiled firmware use matching versioned paths. Each Arduino sket
         ├── ClockOSv2.5/ClockOSv2.5.ino
         ├── ClockOSv2.6/ClockOSv2.6.ino
         ├── ClockOSv2.7/ClockOSv2.7.ino
-        └── ClockOSv2.8/ClockOSv2.8.ino
+        ├── ClockOSv2.8/ClockOSv2.8.ino
+        └── ClockOSv3.8/ClockOSv3.8.ino
 ```
 
 The clock fetches the highest-version update from `.source/compiled/updates/`. Wi-Fi onboarding completes and saves settings before any automatic OTA check, so an update reboot cannot interrupt the first-run wizard. If an earlier firmware interrupted setup after Wi-Fi was saved, V2.6 resumes using those credentials. ClockOS
@@ -54,22 +57,38 @@ When flashing a compiled sketch, the installer shows a visible **Flash device** 
 
 Raw sketches installed to an SD card are placed under `.source/uncompiled/updates/<version>/` or `.source/uncompiled/bootloader/fallback/<version>/`; no root-level `updateV1` folder or `extras` folder is created.
 
-The compiled tree contains only real `.bin` files. `ClockOSv2.8.bin` was built
-with Arduino CLI, ESP32 core 2.0.17, TFT_eSPI, PNGdec, and ArduinoJson; its
-matching raw source is published under the same-name `ClockOSv2.8/` folder. The installer and OTA updater choose the highest semantic-version valid application source or binary (so v2.10 outranks v2.9); neither automatically selects a bootloader or pins to an older manifest. See
-[`.source/releases/ClockOSv2.8.md`](.source/releases/ClockOSv2.8.md) and
+The compiled tree contains only real `.bin` files. `ClockOSv3.8.bin` was built
+with Arduino CLI 1.5.2-rc.1, ESP32 core 2.0.17, TFT_eSPI 2.5.43, PNGdec 1.1.6,
+and ArduinoJson 7.4.3; its matching raw source is published under the same-name
+`ClockOSv3.8/` folder. The installer and OTA updater choose the highest
+semantic-version valid application source or binary (so v2.10 outranks v2.9);
+neither automatically selects a bootloader or pins to an older manifest. See
+[`.source/releases/ClockOSv3.8.md`](.source/releases/ClockOSv3.8.md) and
 [`.agent/todo.md`](.agent/todo.md) for the validation record and remaining
 physical-device checks.
 
-ClockOSv2.8 uses display rotation `3` (180°) with the supplied TFT_eSPI touch
+ClockOSv3.8 uses display rotation `3` (180°) with the supplied TFT_eSPI touch
 calibration `{343, 3436, 266, 3381, 1}`. It does not overwrite that mapping from
 the SD card. Physical corner/center calibration and final orientation checks
 remain open; the standalone touch test is available at
 [`.source/touch_test/touch_test.ino`](.source/touch_test/touch_test.ino).
 
-After Wi-Fi connects, the clock requests current conditions from Open-Meteo using Philadelphia by default; manual city selection remains available. It does not use ISP IP geolocation, which can incorrectly place a clock in a distant city. Weather is laid out as icon, temperature, and city, without a long condition label. Meteocons PNGs are loaded from `/.source/icons/`, with a built-in vector symbol drawn underneath so the icon remains visible if assets or PNG decoding fail.
+After Wi-Fi connects, the clock requests current conditions from Open-Meteo using Philadelphia by default; manual city selection remains available. It does not use ISP IP geolocation, which can incorrectly place a clock in a distant city. Weather is laid out as icon, temperature, and city, without a long condition label. Meteocons PNGs are loaded from `/.source/icons/`; bounded decoding failures fall back to a built-in vector weather symbol.
 
-The home screen is interactive: tap the weather panel for location settings and city entry, the Wi-Fi icon for network management, the calendar panel for the extended calendar, and the battery/settings area for preferences. Settings now use an Apple Settings-inspired full-width grouped category list with category icons, hierarchical detail rows, consistent touch targets, and larger switch controls. The display sleep routine explicitly drives the active-high GPIO27 backlight low and restores it on wake. System labels use a smaller FreeSans scale while the seven-segment clock remains large. A newly computer-formatted SD card is accepted and ClockOS creates its own required folders automatically without erasing unrelated files; the status indicator distinguishes card presence from readiness. The date is shown as `DD/MM/YYYY`; tapping it toggles 12/24-hour time. Offline startup opens a manual date/time editor because the ESP32 cannot recover the clock after a power loss without network time or an RTC.
+The home screen is an original dark bedside display with large segmented time,
+next-alarm, date/time-format, weather, calendar, connectivity, and battery
+cards. Tap the weather panel for location settings and city entry, the Wi-Fi icon
+for network management, the calendar panel for the extended calendar, and the
+settings control for preferences. Settings use an iPadOS-inspired full-width
+grouped category list with category icons, hierarchical detail rows, consistent
+touch targets, selected-theme states, and larger switches. The display sleep
+routine explicitly drives the active-high GPIO27 backlight low and redraws Home
+before re-enabling the backlight. A newly computer-formatted SD card is accepted
+and ClockOS creates its own required folders automatically without erasing
+unrelated files; the status indicator distinguishes card presence from readiness.
+The date is shown as `DD/MM/YYYY`; tapping it toggles 12/24-hour time. Offline
+startup opens a manual date/time editor because the ESP32 cannot recover the
+clock after a power loss without network time or an RTC.
 
 Preferences are stored as JSON only when an SD card is detected, under
 `/data/preferences/` (`settings.json`, `alarm.json`, `wifi.json`, and
@@ -86,7 +105,7 @@ two explicit confirmations it deletes the selected removable card’s existing f
 unrelated files, then installs a fresh ClockOS layout. This does not format or
 repartition the card. Factory Reset on the clock remains a distinct ClockOS-data-only action.
 
-ClockOSV1 also includes an **Appearance** tab in Settings. Built-in theme
+ClockOS includes an **Appearance** section in Settings. Built-in theme
 packages live under `.source/themes/appearance/` and are installed to the same
 location on the SD card. The initial catalog includes **Crystal**, **Midnight**,
 **Ocean**, **Sunrise**, and **Graphite**. Each theme is a small versioned JSON
@@ -117,7 +136,7 @@ Factory Reset. It asks whether Wi-Fi should be enabled, whether Google
 Classroom should be enabled, and whether the display is a **Main** or **Side**
 device for display synchronization. Up to five Wi-Fi networks are stored in
 `wifi.json` and tried in order. The sync compatibility rule accepts the same
-major version with a minor difference of at most `0.1`; incompatible displays
+major version with a minor-number difference of at most `1`; incompatible displays
 are warned and must not be paired.
 
 The profile control uses the supplied default Apple-style silhouette. Google

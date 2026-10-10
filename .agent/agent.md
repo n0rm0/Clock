@@ -8,15 +8,15 @@ This directory holds lightweight project-operating notes for agents working on *
 - The repository now contains the cleaned archive under `.source/`.
 - `.source/uncompiled/` contains raw editable files; `.source/compiled/` mirrors its versioned update and bootloader slots for firmware fetched by the clock.
 - `.source/install/install.py` and `.source/install/setup_sd.bat` are the GitHub installer tools.
-- The bootloader module is now present, but weather icons, compiled binaries, and a hardware-verified build are still pending.
+- ClockOSv3.8 is the current compiled application release; weather icons remain installer-managed SD assets. Physical hardware validation remains open.
 
 ## Intended project direction
 
 The target hardware is a Hosyond 4-inch ESP32-32E display board with an ST7796S panel. The planned clock home screen is landscape (480 × 320) and includes:
 
 - A small current-weather icon and outdoor temperature in the upper-right area.
-- A large seven-segment clock and abbreviated weekday in the center.
-- Date, indoor temperature, and humidity along the bottom.
+- A large segmented clock with next-alarm and date/time-format context on the left.
+- Weather, calendar, Wi-Fi, SD, battery, and Settings controls in compact dark cards.
 
 The planned software uses Wi-Fi for weather, SD-card assets for weather icons, and a versioned update/bootloader layout. Pin assignments, display configuration, library choices, and board behavior must be verified against the actual board documentation and a physical build before being treated as final.
 
@@ -66,7 +66,7 @@ Before claiming firmware work is complete:
 1. Inspect the existing project files rather than replacing them wholesale.
 2. Build with the matching ESP32 board package, selected board, and required libraries.
 3. Resolve compile errors from actual compiler output rather than guessing.
-4. Test the SD-card setup tool on a disposable directory or removable test drive.
+4. Test the SD-card setup tool on a disposable directory or removable test drive; native Windows behavior remains a separate validation step.
 5. Keep configuration secrets (Wi-Fi credentials, API keys, location data) out of version control; use ignored local configuration or documented placeholders.
 6. Update `.agent/todo.md` only when a task is genuinely complete and state what validation was performed.
 

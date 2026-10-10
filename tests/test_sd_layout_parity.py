@@ -1,4 +1,5 @@
 import ast
+import json
 import os
 import re
 import tempfile
@@ -7,8 +8,16 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 INSTALLER_PATH = ROOT / ".source" / "install" / "install.py"
-FIRMWARE_PATH = ROOT / ".source" / "uncompiled" / "updates" / "ClockOSv2.7" / "ClockOSv2.7.ino"
-CONFIG_PATH = ROOT / ".source" / "uncompiled" / "updates" / "ClockOSv2.7" / "config.h"
+
+
+def current_firmware_paths():
+    manifest = json.loads((ROOT / ".source" / "releases" / "current.json").read_text(encoding="utf-8"))
+    source_dir = ROOT / manifest["rawSourcePath"]
+    sketch = manifest["sketch"]
+    return source_dir / f"{sketch}.ino", source_dir / "config.h"
+
+
+FIRMWARE_PATH, CONFIG_PATH = current_firmware_paths()
 
 
 def load_installer_layout():
