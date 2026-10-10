@@ -25,11 +25,11 @@ SOURCE_ROOT = ".source/uncompiled/updates"
 # setup useful and predictable if GitHub is unavailable or the manifest is bad.
 DEFAULT_RELEASE = {
     "productName": "ClockOS",
-    "displayVersion": "v2.5",
-    "firmwareIdentity": "ClockOSv2.5",
-    "sketch": "ClockOSv2.5",
-    "rawSourcePath": ".source/uncompiled/updates/ClockOSv2.5",
-    "binaryPath": ".source/compiled/updates/ClockOSv2.5/ClockOSv2.5.bin",
+    "displayVersion": "v2.6",
+    "firmwareIdentity": "ClockOSv2.6",
+    "sketch": "ClockOSv2.6",
+    "rawSourcePath": ".source/uncompiled/updates/ClockOSv2.6",
+    "binaryPath": ".source/compiled/updates/ClockOSv2.6/ClockOSv2.6.bin",
 }
 RELEASE = dict(DEFAULT_RELEASE)
 PRODUCT_NAME = DEFAULT_RELEASE["productName"]
@@ -208,16 +208,10 @@ def list_repo(path):
 
 
 def latest_source_path():
-    """Find the manifest source, or the newest modern/legacy application sketch."""
-    release = load_release_manifest()
+    """Find the highest-version same-name ClockOS/updateV application sketch."""
     url = "https://api.github.com/repos/%s/%s/git/trees/%s?recursive=1" % (OWNER, REPO, BRANCH)
     data = json.loads(http_get(url))
     prefix = SOURCE_ROOT + "/"
-    preferred = release["rawSourcePath"].rstrip("/")
-    preferred_ino = preferred + "/" + release["sketch"] + ".ino"
-    if any(item.get("type") == "blob" and item.get("path") == preferred_ino
-           for item in data.get("tree", [])):
-        return preferred
     folders = {}
     for item in data.get("tree", []):
         path = item.get("path", "")
@@ -229,7 +223,7 @@ def latest_source_path():
             folders[name] = folder
     if not folders:
         raise RuntimeError("No raw ClockOS/updateV application sketch was found under " + SOURCE_ROOT)
-    return max(folders.values(), key=lambda x: (version_key(x), x))
+    return max(folders.values(), key=lambda x: (version_key(x), os.path.basename(x).lower().startswith("clockos"), x.lower()))
 
 
 def fetch_repo(stage):
@@ -807,19 +801,15 @@ def version_key(path):
 
 
 def default_flash_target(sketches):
-    """Prefer the manifest's application, then another application, never a bootloader."""
-    release_sketch = load_release_manifest()["sketch"]
-    if release_sketch in sketches and is_application_sketch(release_sketch):
-        return release_sketch
+    """Choose the highest-version application sketch, preferring canonical ClockOS names."""
     applications = [name for name in sketches if is_application_sketch(name)]
     if applications:
-        return max(applications, key=lambda name: (version_key(name), name.lower()))
+        return max(applications, key=lambda name: (version_key(name), name.lower().startswith("clockos"), name.lower()))
     return next((name for name in sketches if not is_bootloader_sketch(name)), None)
 
 
 def latest_binary():
-    """Find the manifest binary, or the newest compiled application .bin."""
-    release = load_release_manifest()
+    """Find the highest-version compiled ClockOS/updateV application .bin."""
     url = "https://api.github.com/repos/%s/%s/git/trees/%s?recursive=1" % (OWNER, REPO, BRANCH)
     data = json.loads(http_get(url))
     prefix = ".source/compiled/updates/"
@@ -832,11 +822,9 @@ def latest_binary():
         folder = relative.split("/", 1)[0]
         if is_application_sketch(folder):
             application_paths.append(path)
-    if release["binaryPath"] in application_paths:
-        return release["binaryPath"]
     if not application_paths:
         raise RuntimeError("No compiled ClockOS/updateV application .bin is available in GitHub at " + prefix)
-    return max(application_paths, key=lambda x: (version_key(x), x))
+    return max(application_paths, key=lambda x: (version_key(x), os.path.basename(x.rsplit("/", 1)[0]).lower().startswith("clockos"), x))
 
 
 def download_latest_binary():

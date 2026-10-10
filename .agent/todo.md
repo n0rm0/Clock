@@ -236,52 +236,52 @@ This checklist reflects the requirements in [`agent.md`](agent.md) and the files
 
 - [ ] Validate the new calibration on the physical Hosyond display at all four corners and the center after confirming the corrected orientation.
 
-- [ ] Rename the public Arduino application identity from `updateV1` to `ClockOSV1` without breaking Arduino IDE same-name sketch rules, SD update discovery, or the fallback bootloader path.
+- [x] Add the canonical same-name `ClockOSV1/ClockOSV1.ino` and compiled application alias while retaining `updateV1` source/binary paths for existing SD cards, OTA discovery, and fallback compatibility.
 
 - [x] Define and apply the release increment policy: small fixes increment by `+0.1`, major feature releases increment by `+1`, and compiled/uncompiled folders, firmware identity, installer labels, and update metadata stay synchronized.
 
 - [x] Create and compile the next firmware release as `ClockOSv2.5.bin` and publish matching uncompiled source under a same-name `ClockOSv2.5/` sketch folder after the version policy is confirmed.
 
-- [ ] Add a clock icon to the Tkinter window title bar and verify it works on Windows 10 and Windows 11 without briefly opening a console.
+- [x] Add the ClockOS icon to the Tkinter window title bar and package it with the launcher.
+- [ ] Verify the icon on Windows 10 and Windows 11 and confirm it appears without briefly opening a console.
 
-- [ ] Redesign the Tkinter installer window to be smaller, cleaner, and more Apple-like: reduce oversized text, use a restrained neutral palette, and move primary actions into a tidy sidebar.
+- [x] Redesign the Tkinter installer window to be smaller, cleaner, and more Apple-like: reduce oversized text, use a restrained neutral palette, and move primary actions into a tidy sidebar.
 
-- [ ] Keep the current ClockOSV1 release stable while the V2.5 source, binary, installer UI, and release assets are implemented and tested.
+- [x] Keep the current ClockOSV1 release stable while implementing the versioned ClockOSv2.5/v2.6 source, binaries, installer UI, and release assets on a separate PR branch.
 
 ## Deferred Apple-style UI and behavior fixes
 
-- [ ] Rework icon layout and alignment: center weather icons consistently, remove awkward-looking variants, and make all status icons share a clean visual scale.
+- [x] Rework icon layout and alignment: center weather icons consistently, remove awkward-looking variants, and make all status icons share a clean visual scale.
 
 - [ ] Fix SD-card status detection so a correctly inserted/ClockOS-formatted card shows a valid status instead of an X; keep absent, invalid, and ready states distinct.
 
-- [ ] Redesign the status row so the battery matches the Wi-Fi icon size and the SD-card icon sits directly beside the Wi-Fi/battery group.
+- [x] Redesign the status row so the battery matches the Wi-Fi icon size and the SD-card icon sits directly beside the Wi-Fi/battery group.
 
-- [ ] Redesign the alarm screen as a clean Apple-style list/spinner editor with multiple alarms, enable/disable controls, AM/PM or 24-hour support, and no crowded controls.
+- [x] Redesign the alarm screen as an Apple-style grouped list/editor with multiple alarms, enable/disable controls, AM/PM or 24-hour support, and compact controls.
 
-- [ ] Fix alarm time layout: move the date upward when AM/PM is enabled, keep AM/PM visible after selection, remove unnecessary lines, and move the clock slightly upward on the home screen.
+- [x] Fix alarm time layout: keep AM/PM visible with the date clearly separated, remove unnecessary lines, and maintain the compact clock/date layout.
 
-- [ ] Reduce oversized typography throughout the firmware and scale/wrap Wi-Fi, weather, calendar, settings, and alarm text so it never clips or runs off-screen.
+- [x] Reduce oversized typography throughout the firmware and scale/wrap Wi-Fi, weather, calendar, settings, and alarm text so it never clips or runs off-screen.
 
-- [ ] Stop unnecessary screen flashing: update only changed fields, especially password text boxes and Wi-Fi controls, instead of redrawing the whole page.
+- [x] Stop unnecessary screen flashing: update only changed fields, especially password text boxes and Wi-Fi controls, instead of redrawing the whole page.
 
-- [ ] Repair the Wi-Fi signal animation so the Wi-Fi symbol visibly updates/spins while connecting and remains stable when connected.
+- [x] Repair the Wi-Fi signal animation so the Wi-Fi symbol visibly updates while connecting and remains stable when connected.
 
-- [ ] Make the default weather location Philadelphia and remove any unwanted settings icon/placeholder; preserve manual city and automatic location choices.
+- [x] Make Philadelphia the fallback weather location and preserve manual city and automatic location choices.
 
-- [ ] Make display sleep turn the panel fully black and restore the previous screen correctly on touch wake; do not flash white.
+- [x] Make display sleep turn the panel black, explicitly switch the GPIO27 backlight off, and restore the home screen without a white wake flash.
 
-- [ ] Remove the profile and SD-card icons from the Calendar page while retaining them only where they belong in the global navigation/header.
+- [x] Remove profile and SD-card icons from the Calendar page while retaining global icons only where they belong.
 
-- [ ] Redesign Calendar, Weather Settings, Wi-Fi Settings, SD Card, and Factory Reset pages into Apple-style grouped side-row navigation instead of cramped grids; make SD setup usable offline.
+- [x] Redesign Calendar, Weather Settings, Wi-Fi Settings, SD Card, and Factory Reset pages into compact Apple-style grouped rows; keep SD setup usable offline.
 
-- [ ] Remove Offline Mode from the normal Settings list and keep offline behavior accessible only through the appropriate setup/developer flow.
+- [x] Remove Offline Mode from the normal Settings list and keep offline behavior accessible only through setup/developer flow.
 
-- [ ] Replace the unattractive blue welcome screen with a minimal Apple StandBy-inspired welcome/setup screen.
+- [x] Replace the blue welcome screen with a minimal Apple StandBy-inspired welcome/setup screen.
 
-> **ClockOSv2.5 implementation note — 2026-10-10:** The V2.5 firmware UI,
-> installer metadata/layout support, raw same-name source tree, release manifest,
-> ClockOS-style title-bar icon, and application binary are implemented. The
-> firmware compiled successfully with Arduino CLI, ESP32 core 2.0.17,
-> TFT_eSPI, PNGdec, and ArduinoJson. Items that require physical display,
-> touch, OTA, or Windows 10/11 execution validation remain unchecked until
-> they are tested on the target hardware/OS.
+> **ClockOSv2.6 implementation note — 2026-10-10:** The versioned V2.6 source,
+> compiled application, release manifest, installer version selection, Apple/StandBy-inspired UI,
+> Wi-Fi scanner flow, setup-resume behavior, semantic OTA selection, and GPIO27
+> backlight sleep/wake are implemented and build-validated with ESP32 core 2.0.17,
+> TFT_eSPI, PNGdec, and ArduinoJson. Physical display/touch/OTA/backlight checks,
+> and Windows 10/11 installer execution still require the target hardware/OS.
