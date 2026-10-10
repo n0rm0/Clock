@@ -6,8 +6,8 @@
   "sketch": "ClockOSv2.5",
   "rawSourcePath": ".source/uncompiled/updates/ClockOSv2.5",
   "binaryPath": ".source/compiled/updates/ClockOSv2.5/ClockOSv2.5.bin",
-  "binaryBytes": 1143984,
-  "sha256": "01fc84e7df874b14d01a074e9118b0549ce2e39fa0b607872458cae5364abce9",
+  "binaryBytes": 1139264,
+  "sha256": "e101a7fb21c6a509f87f6ab378db2545dff88ec2ee12a0b5c65e7e1ca7eca97f",
   "releaseType": "major",
   "previousStableRelease": "ClockOSV1"
 }

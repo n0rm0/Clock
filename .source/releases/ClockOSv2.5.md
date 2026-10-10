@@ -19,12 +19,12 @@ The application was compiled for the Hosyond ESP32-32E configuration with:
 - **Board/FQBN:** `esp32:esp32:esp32:PartitionScheme=min_spiffs`
 - **ESP32 core:** `2.0.17`
 - **Libraries:** TFT_eSPI 2.5.43, PNGdec 1.1.6, ArduinoJson 7.4.3
-- **Flash usage:** 1,137,405 bytes / 1,966,080 bytes (57%)
+- **Flash usage:** 1,132,685 bytes / 1,966,080 bytes (57%)
 - **Dynamic memory:** 96,336 bytes / 327,680 bytes (29%)
-- **Binary size:** 1,143,984 bytes
-- **SHA-256:** `01fc84e7df874b14d01a074e9118b0549ce2e39fa0b607872458cae5364abce9`
+- **Binary size:** 1,139,264 bytes
+- **SHA-256:** `e101a7fb21c6a509f87f6ab378db2545dff88ec2ee12a0b5c65e7e1ca7eca97f`
 
-The build completed successfully. Existing ArduinoJson and third-party library deprecation warnings remain non-blocking and should be addressed in a dedicated compatibility pass rather than mixed into this release.
+The initial build completed successfully; the follow-up settings/sidebar, automatic fresh-SD layout creation, vector-weather fallback, Philadelphia weather layout, and compact typography were rebuilt successfully for the corrective PR update. Existing ArduinoJson and third-party library deprecation warnings remain non-blocking and should be addressed in a dedicated compatibility pass rather than mixed into this release.
 
 ## Release safeguards
 

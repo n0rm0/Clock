@@ -109,6 +109,7 @@ String sdCardMessage = "";
 bool screenSleeping = false;
 Screen screenBeforeSleep = S_HOME;
 bool factoryResetArmed = false;
+uint8_t settingsCategory = 0; // 0 General, 1 Wi-Fi, 2 Appearance, 3 Calendar, 4 SD Card, 5 System
 uint32_t lastActivity = 0;
 bool swipeBackDetected = false;
 uint8_t versionTapCount = 0;
@@ -132,10 +133,12 @@ String fitText(const GFXfont* f, String value, int maxWidth) {
   while (value.length() && tft.textWidth(value + "...") > maxWidth) value.remove(value.length() - 1);
   return value + "...";
 }
-#define F12B (&FreeSansBold12pt7b)
-#define F18B (&FreeSansBold18pt7b)
-#define F24B (&FreeSansBold24pt7b)
-#define F12  (&FreeSans12pt7b)
+// Compact system typography: 9 pt body, 9 pt labels, 12 pt section headings,
+// and 18 pt emphasis. The seven-segment clock remains purposefully large.
+#define F12B (&FreeSansBold9pt7b)
+#define F18B (&FreeSansBold12pt7b)
+#define F24B (&FreeSansBold18pt7b)
+#define F12  (&FreeSans9pt7b)
 
 // ====================================================================
 //  touch (TFT_eSPI built-in XPT2046 support + 4-corner calibration)
@@ -334,17 +337,10 @@ bool fetchWeather() {
 
   if (settings.manualWeather) {
     lat = manualLat; lon = manualLon; city = manualCity;
-  } else if (http.begin(client, "https://ipapi.co/json/")) {
-    int status = http.GET();
-    if (status == HTTP_CODE_OK) {
-      DynamicJsonDocument geo(1536);
-      if (deserializeJson(geo, http.getString()) == DeserializationError::Ok) {
-        lat = geo["latitude"] | WEATHER_LAT;
-        lon = geo["longitude"] | WEATHER_LON;
-        city = (const char*)(geo["city"] | "Local");
-      }
-    }
-    http.end();
+  } else {
+    // IP geolocation can resolve to a distant ISP gateway (e.g. Phoenixville
+    // or Phoenix). Keep the documented default anchored to Philadelphia.
+    lat = WEATHER_LAT; lon = WEATHER_LON; city = "Philadelphia";
   }
 
   char url[300];
@@ -369,26 +365,50 @@ bool fetchWeather() {
 }
 
 void drawWeatherFallback(int x, int y, int code) {
-  // Always show a visible icon even when SD icons were not installed.
-  if (code >= 51 && code <= 82) {
-    tft.fillCircle(x + 42, y + 38, 20, COL_WHITE);
-    tft.fillCircle(x + 62, y + 34, 25, COL_WHITE);
-    tft.fillRoundRect(x + 20, y + 36, 72, 28, 12, COL_WHITE);
-    for (int i = 0; i < 3; i++) tft.drawLine(x + 28 + i * 22, y + 74, x + 20 + i * 22, y + 88, COL_BLUE);
-  } else if (code >= 95) {
-    tft.fillCircle(x + 48, y + 45, 28, UI_YEL);
-    tft.drawLine(x + 42, y + 78, x + 30, y + 94, UI_YEL);
-    tft.drawLine(x + 62, y + 78, x + 74, y + 94, UI_YEL);
-  } else {
-    tft.fillCircle(x + 52, y + 48, 28, UI_YEL);
-    tft.drawCircle(x + 52, y + 48, 35, UI_YEL);
+  // Draw a built-in, high-contrast glyph first so weather stays visible even
+  // when the SD card has no downloaded PNGs or PNG decoding fails.
+  const uint16_t cloud = C(226, 232, 244);
+  const uint16_t sun = C(255, 196, 64);
+  bool rain = (code >= 51 && code <= 82) || (code >= 95);
+  bool snow = code >= 71 && code <= 77;
+  bool fog = code == 45 || code == 48;
+  bool cloudy = code >= 2 || code == 1 || code == -1;
+  if (!cloudy && code == 0) {
+    tft.fillCircle(x + 48, y + 42, 24, sun);
+    for (int a = 0; a < 8; a++) {
+      float ang = a * 0.785398f;
+      tft.drawLine(x + 48 + cosf(ang) * 31, y + 42 + sinf(ang) * 31,
+                   x + 48 + cosf(ang) * 39, y + 42 + sinf(ang) * 39, sun);
+    }
+    return;
+  }
+  if (code <= 3 && code >= 1) tft.fillCircle(x + 69, y + 30, 17, sun);
+  tft.fillCircle(x + 39, y + 47, 18, cloud);
+  tft.fillCircle(x + 58, y + 37, 23, cloud);
+  tft.fillCircle(x + 78, y + 48, 17, cloud);
+  tft.fillRoundRect(x + 25, y + 45, 68, 23, 11, cloud);
+  if (rain && !snow) {
+    for (int i = 0; i < 3; i++) tft.drawLine(x + 38 + i * 21, y + 73, x + 32 + i * 21, y + 86, C(82, 178, 255));
+    if (code >= 95) tft.drawLine(x + 60, y + 70, x + 49, y + 88, sun);
+  } else if (snow) {
+    for (int i = 0; i < 3; i++) {
+      int sx = x + 39 + i * 21, sy = y + 79;
+      tft.drawLine(sx - 4, sy, sx + 4, sy, COL_WHITE);
+      tft.drawLine(sx, sy - 4, sx, sy + 4, COL_WHITE);
+    }
+  } else if (fog) {
+    tft.drawFastHLine(x + 27, y + 75, 64, C(176, 191, 210));
+    tft.drawFastHLine(x + 34, y + 83, 50, C(176, 191, 210));
   }
 }
 
 void drawWeatherIcon(int x, int y) {
   char path[96];
   snprintf(path, sizeof(path), "%s/%s.png", ICON_DIR, weather.icon.c_str());
-  if (!drawPng(path, x, y)) drawWeatherFallback(x, y, weather.code);
+  drawWeatherFallback(x, y, weather.code);
+  // Overlay the installed illustration when available; the built-in glyph
+  // underneath remains a readable fallback for transparent/corrupt PNGs.
+  drawPng(path, x, y);
 }
 
 // ====================================================================
@@ -986,9 +1006,25 @@ bool sdDirectoryExists(const char* path) {
   return ok;
 }
 
+bool ensureClockOsSdLayout() {
+  if (!sdPresent) return false;
+  // A freshly computer-formatted FAT card is valid. Create ClockOS-owned
+  // directories automatically; never mark the card bad merely because it is new.
+  bool ok = true;
+  const char* dirs[] = {"/data", PREFERENCES_DIR, "/data/secrets", "/.source",
+                        "/.source/data", "/.source/data/secrets", ICON_DIR,
+                        "/.source/compiled", UPDATES_DIR, "/.source/uncompiled",
+                        "/.source/uncompiled/updates", THEMES_DIR};
+  for (const char* dir : dirs) {
+    if (!SD.exists(dir) && !SD.mkdir(dir) && !SD.exists(dir)) ok = false;
+  }
+  return ok;
+}
+
 bool clockOsSdReady() {
-  return sdPresent && sdDirectoryExists("/.source") && sdDirectoryExists(PREFERENCES_DIR) &&
-         sdDirectoryExists("/.source/compiled/updates");
+  return sdPresent && sdDirectoryExists("/data") && sdDirectoryExists(PREFERENCES_DIR) &&
+         sdDirectoryExists("/data/secrets") && sdDirectoryExists("/.source") &&
+         sdDirectoryExists(ICON_DIR) && sdDirectoryExists(UPDATES_DIR);
 }
 
 void drawStatusBlock() {
@@ -996,7 +1032,7 @@ void drawStatusBlock() {
   int lvl = (WiFi.status() == WL_CONNECTED) ? rssiLevel(WiFi.RSSI()) : 0;
   bool connecting = WiFi.status() == WL_IDLE_STATUS;
   drawWifiSignal(26, 294, lvl, 0x0000, COL_WHITE, 0x39E7, connecting);
-  drawSdCardIcon(70, 294, sdOk, sdPresent && !sdOk);
+  drawSdCardIcon(70, 294, sdPresent, false);
   int pct = readBatteryPct();
   drawBattery(102, 286, pct, 0x0000, COL_WHITE);
   if (settings.showBatteryPercent) {
@@ -1014,6 +1050,7 @@ void refreshSdState() {
   lastCheck = millis();
   bool present = SD.begin(SD_PIN_CS);
   sdPresent = present;
+  if (present) ensureClockOsSdLayout();
   bool valid = present && clockOsSdReady();
   bool changed = present != previousPresent || valid != previousOk;
   sdOk = valid;
@@ -1029,21 +1066,19 @@ void refreshSdState() {
 
 void drawRightPanel() {
   tft.fillRect(241, 0, 239, 320, 0x0000);
-  // All weather assets use one centered 96 px box; the fallback uses the same center.
-  drawWeatherIcon(312, 4);
-  String weatherWord = weather.valid ? (String((int)roundf(weather.temperatureF)) + "°  " + weather.label) : "Weather offline";
-  weatherWord = fitText(F18B, weatherWord, 210);
-  txt(F18B, COL_WHITE, TC_DATUM, weatherWord, 360, 116);
-  String place = weather.valid ? weather.city : "Connect Wi-Fi for local weather";
-  txt(F12, COL_DIM, TC_DATUM, fitText(F12, place, 210), 360, 146);
-  tft.drawFastHLine(255, 166, 210, 0x7BEF);
-  txt(F18B, COL_WHITE, TL_DATUM, "Calendar", 258, 183);
+  // Compact weather module: icon, temperature, then place; never a long condition label.
+  drawWeatherIcon(312, 2);
+  String temperature = weather.valid ? (String((int)roundf(weather.temperatureF)) + "°") : "--°";
+  txt(F18B, COL_WHITE, TC_DATUM, temperature, 360, 112);
+  txt(F12, COL_DIM, TC_DATUM, weather.valid ? weather.city : "Philadelphia", 360, 137);
+  tft.drawFastHLine(255, 160, 210, 0x7BEF);
+  txt(F12B, COL_WHITE, TL_DATUM, "Calendar", 258, 176);
   if (settings.calendarEnabled && settings.notifications && classroomAssignmentCount > 0) {
     String title = fitText(F12, nextAssignment, 196);
-    txt(F12, COL_WHITE, TL_DATUM, title, 258, 226);
-    txt(F12, COL_DIM, TL_DATUM, fitText(F12, nextAssignmentDue, 196), 258, 252);
+    txt(F12, COL_WHITE, TL_DATUM, title, 258, 214);
+    txt(F12, COL_DIM, TL_DATUM, fitText(F12, nextAssignmentDue, 196), 258, 238);
   } else {
-    txt(F12, COL_DIM, TL_DATUM, "No upcoming assignments", 258, 226);
+    txt(F12, COL_DIM, TL_DATUM, "No upcoming assignments", 258, 214);
   }
 }
 
@@ -1359,17 +1394,80 @@ void settingsGroupRow(int y, const String& label, const String& value, bool acce
   if (value.length()) txt(F12, accent ? blue : C(170, 175, 188), MR_DATUM, fitText(F12, value, 160), 447, y + 19);
 }
 
+void drawSettingsToggle(int x, int y, bool enabled) {
+  uint16_t track = enabled ? C(48, 209, 88) : C(76, 79, 88);
+  tft.fillRoundRect(x, y, 38, 22, 11, track);
+  tft.fillCircle(enabled ? x + 27 : x + 11, y + 11, 8, 0xFFFF);
+}
+
+void drawSettingsOption(int y, const String& title, const String& detail, bool enabled, bool toggle) {
+  tft.fillRoundRect(150, y, 318, 49, 11, UI_KEY);
+  txt(F12B, UI_TEXT, ML_DATUM, fitText(F12B, title, toggle ? 206 : 282), 163, y + 15);
+  txt(F12, C(170, 175, 188), ML_DATUM, fitText(F12, detail, toggle ? 206 : 282), 163, y + 35);
+  if (toggle) drawSettingsToggle(420, y + 13, enabled);
+  else txt(F12B, C(10, 132, 255), MR_DATUM, ">", 456, y + 25);
+}
+
+void drawSettingsSidebar() {
+  const char* labels[] = {"General", "Wi-Fi", "Appearance", "Calendar", "SD Card", "System"};
+  for (int i = 0; i < 6; i++) {
+    int y = 52 + i * 39;
+    if (i == settingsCategory) tft.fillRoundRect(10, y, 128, 33, 9, C(45, 49, 62));
+    txt(F12B, i == settingsCategory ? UI_TEXT : C(170, 175, 188), ML_DATUM,
+        labels[i], 20, y + 17);
+  }
+}
+
 void showSettingsPage() {
-  screen = S_SETTINGS; drawBackHeader("Settings");
-  settingsRow(14, 54, "Time format", settings.use24Hour ? "24 hour" : "12 hour", settings.use24Hour);
-  settingsRow(256, 54, "Appearance", ">", true);
-  settingsRow(14, 98, "Wi-Fi", WiFi.status() == WL_CONNECTED ? "Connected" : "Not connected", WiFi.status() == WL_CONNECTED);
-  settingsRow(256, 98, "Weather", settings.manualWeather ? "Manual" : "Automatic", settings.manualWeather);
-  settingsRow(14, 142, "Calendar", settings.calendarEnabled ? "ON" : "OFF", settings.calendarEnabled);
-  settingsRow(256, 142, "Classroom", settings.classroomEnabled ? "ON" : "OFF", settings.classroomEnabled);
-  settingsRow(14, 186, "SD Card", sdOk ? "Ready" : (sdPresent ? "Needs setup" : "None"), sdOk);
-  settingsRow(256, 186, "Factory Reset", ">", false);
-  txt(F12, C(170, 175, 188), TC_DATUM, String(CLOCKOS_FIRMWARE) + "  •  tap version 5× for Developer Mode", 240, 286);
+  screen = S_SETTINGS;
+  tft.fillScreen(UI_BACK);
+  txt(F12B, UI_TEXT, TL_DATUM, "Settings", 14, 20);
+  drawAppleButton(402, 7, 66, 27, "Back", false);
+  tft.drawFastVLine(143, 44, 264, C(58, 62, 72));
+  drawSettingsSidebar();
+  const char* titles[] = {"General", "Wi-Fi", "Appearance", "Calendar", "SD Card", "System"};
+  txt(F12B, UI_TEXT, TL_DATUM, titles[settingsCategory], 154, 26);
+  switch (settingsCategory) {
+    case 0:
+      drawSettingsOption(54, "24-hour time", "Use 24-hour clock format", settings.use24Hour, true);
+      drawSettingsOption(110, "Battery percentage", "Show charge next to status icon", settings.showBatteryPercent, true);
+      drawSettingsOption(166, "Appearance", "Theme and display style", false, false);
+      break;
+    case 1:
+      drawSettingsOption(54, "Wi-Fi", WiFi.status() == WL_CONNECTED ? WiFi.SSID() : "Not connected", WiFi.status() == WL_CONNECTED, false);
+      drawSettingsOption(110, "Choose network", "View available networks", false, false);
+      drawSettingsOption(166, "Saved networks", savedNetworkCount ? String(savedNetworkCount) + " saved" : "None saved", false, false);
+      break;
+    case 2: {
+      const char* names[] = {"Crystal", "Midnight", "Ocean", "Sunrise", "Graphite"};
+      const char* ids[] = {"crystal", "midnight", "ocean", "sunrise", "graphite"};
+      for (int i = 0; i < 5; i++) {
+        int y = 52 + i * 43;
+        tft.fillRoundRect(150, y, 318, 37, 10, UI_KEY);
+        txt(F12, UI_TEXT, ML_DATUM, names[i], 163, y + 19);
+        if (appearanceTheme == ids[i]) {
+          tft.fillCircle(444, y + 18, 8, C(10, 132, 255));
+          txt(F12B, 0xFFFF, MC_DATUM, "✓", 444, y + 18);
+        } else txt(F12B, C(170, 175, 188), MR_DATUM, ">", 455, y + 19);
+      }
+      break;
+    }
+    case 3:
+      drawSettingsOption(54, "Calendar", "Show calendar and reminders", settings.calendarEnabled, true);
+      drawSettingsOption(110, "Classroom", "Sync assignment reminders", settings.classroomEnabled, true);
+      drawSettingsOption(166, "Notifications", "Allow reminder alerts", settings.notifications, true);
+      break;
+    case 4:
+      drawSettingsOption(54, "ClockOS storage", sdOk ? "Ready" : (sdPresent ? "Needs setup" : "No card detected"), sdOk, false);
+      drawSettingsOption(110, "Prepare storage", "Create ClockOS folders; keep other files", false, false);
+      drawSettingsOption(166, "Browse files", "Read-only SD card viewer", false, false);
+      break;
+    default:
+      drawSettingsOption(54, "ClockOS version", CLOCKOS_VERSION, false, false);
+      drawSettingsOption(110, "Factory Reset", "Erase local ClockOS data", false, false);
+      txt(F12, C(170, 175, 188), TL_DATUM, "Tap the version 5× for Developer Mode", 158, 190);
+      break;
+  }
 }
 
 void showFactoryResetPage() {
@@ -1399,21 +1497,22 @@ void drawAppleButton(int x, int y, int w, int h, const String& label, bool prima
 
 void drawUpdatePage(int pct, const String& status) {
   screen = S_UPDATE;
-  uint16_t bg = C(242, 244, 248), card = 0xFFFF, blue = C(0, 122, 255);
+  uint16_t bg = C(17, 19, 24), card = C(32, 35, 43), blue = C(10, 132, 255);
+  uint16_t primary = C(242, 244, 248), secondary = C(165, 171, 184);
   tft.fillScreen(bg);
-  tft.fillRoundRect(34, 22, 412, 276, 22, card);
-  drawAppleUpdateIcon(240, 76, blue);
-  txt(F18B, C(20, 20, 24), TC_DATUM, "Software Update", 240, 128);
-  txt(F12, C(100, 105, 115), TC_DATUM, String(CLOCKOS_NAME) + " " + CLOCKOS_VERSION, 240, 153);
+  tft.fillRoundRect(54, 34, 372, 252, 18, card);
+  drawAppleUpdateIcon(240, 73, blue);
+  txt(F18B, primary, TC_DATUM, "Software Update", 240, 122);
+  txt(F12, secondary, TC_DATUM, String(CLOCKOS_NAME) + " " + CLOCKOS_VERSION, 240, 145);
   String line = status;
-  if (line.length() > 38) line = line.substring(0, 38);
-  txt(F12, C(75, 78, 88), TC_DATUM, line, 240, 181);
-  tft.fillRoundRect(78, 203, 324, 12, 6, C(220, 225, 234));
-  int fill = constrain(pct, 0, 100) * 320 / 100;
-  if (fill > 0) tft.fillRoundRect(80, 205, fill, 8, 4, blue);
+  if (line.length() > 52) line = line.substring(0, 52);
+  txt(F12, primary, TC_DATUM, line, 240, 171);
+  tft.fillRoundRect(92, 192, 296, 10, 5, C(60, 64, 74));
+  int fill = constrain(pct, 0, 100) * 288 / 100;
+  if (fill > 0) tft.fillRoundRect(96, 194, fill, 6, 3, blue);
   char progress[8]; snprintf(progress, sizeof(progress), "%d%%", constrain(pct, 0, 100));
-  txt(F12B, C(50, 52, 60), TC_DATUM, progress, 240, 235);
-  txt(F12, C(115, 120, 130), TC_DATUM, "Updates keep your clock secure and current.", 240, 258);
+  txt(F12B, primary, TC_DATUM, progress, 240, 220);
+  txt(F12, secondary, TC_DATUM, "ClockOS keeps your clock current", 240, 246);
 }
 
 void factoryResetClock() {
@@ -1543,9 +1642,10 @@ void setup() {
 
   SPI.begin(SD_PIN_SCK, SD_PIN_MISO, SD_PIN_MOSI, SD_PIN_CS);   // SD on the default (VSPI) bus; TFT uses HSPI
   sdPresent = SD.begin(SD_PIN_CS);
+  if (sdPresent) ensureClockOsSdLayout();
   sdOk = clockOsSdReady();
   if (!sdPresent) Serial.println("SD not found");
-  else if (!sdOk) Serial.println("SD present but not formatted for ClockOS");
+  else if (!sdOk) Serial.println("SD present; ClockOS folders could not be created");
 
   ensureCalibration();
   loadSettings();
@@ -1705,24 +1805,54 @@ void loop() {
       else return;
       firstSetupSync = false; settings.setupComplete = true; saveSettings(); showHome(); return;
     }
-    if (y >= 298) {
-      uint32_t now = millis();
-      if (now - versionTapWindow > 2200) versionTapCount = 0;
-      versionTapWindow = now; versionTapCount++;
-      if (versionTapCount >= 5) { versionTapCount = 0; showDeveloperPinPage(); }
+    if (x >= 398 && y < 42) { leaveSettingsPage(); return; }
+    if (x < 143 && y >= 52 && y < 286) {
+      settingsCategory = constrain((y - 52) / 39, 0, 5);
+      showSettingsPage(); return;
+    }
+    if (settingsCategory == 0) {
+      if (y >= 54 && y < 103) settings.use24Hour = !settings.use24Hour;
+      else if (y >= 110 && y < 159) settings.showBatteryPercent = !settings.showBatteryPercent;
+      else if (y >= 166 && y < 215) { settingsCategory = 2; showSettingsPage(); return; }
+      else return;
+      saveSettings(); showSettingsPage(); drawStatusBlock(); return;
+    }
+    if (settingsCategory == 1) {
+      if (y >= 54 && y < 160) { showScan(); return; }
+      if (y >= 166 && y < 215) { showScan(); return; }
       return;
     }
-    if (x < 100 && y < 45) { leaveSettingsPage(); return; }
-    if (x >= 400 && y < 50) { showSdCardPage(); return; }
-    if (y >= 54 && y < 88 && x < 240) settings.use24Hour = !settings.use24Hour;
-    else if (y >= 54 && y < 88 && x >= 240) { showAppearancePage(); return; }
-    else if (y >= 98 && y < 132 && x < 240) { showWifiPage(); return; }
-    else if (y >= 98 && y < 132 && x >= 240) { showWeatherPage(); return; }
-    else if (y >= 142 && y < 176 && x < 240) settings.calendarEnabled = !settings.calendarEnabled;
-    else if (y >= 142 && y < 176 && x >= 240) settings.classroomEnabled = !settings.classroomEnabled;
-    else if (y >= 186 && y < 220 && x < 240) { showSdCardPage(); return; }
-    else if (y >= 186 && y < 220 && x >= 240) { showFactoryResetPage(); return; }
-    saveSettings(); showSettingsPage();
+    if (settingsCategory == 2) {
+      const char* ids[] = {"crystal", "midnight", "ocean", "sunrise", "graphite"};
+      for (int i = 0; i < 5; i++) {
+        int rowY = 52 + i * 43;
+        if (y >= rowY && y < rowY + 37) {
+          appearanceTheme = ids[i]; applyAppearanceTheme(); saveSettings(); showSettingsPage(); return;
+        }
+      }
+      return;
+    }
+    if (settingsCategory == 3) {
+      if (y >= 54 && y < 103) settings.calendarEnabled = !settings.calendarEnabled;
+      else if (y >= 110 && y < 159) settings.classroomEnabled = !settings.classroomEnabled;
+      else if (y >= 166 && y < 215) settings.notifications = !settings.notifications;
+      else return;
+      saveSettings(); showSettingsPage(); drawRightPanel(); return;
+    }
+    if (settingsCategory == 4) {
+      if (y >= 54 && y < 103) return;
+      if (y >= 110 && y < 159) { showSdCardPage(); return; }
+      if (y >= 166 && y < 215) { showSdFilesPage(); return; }
+      return;
+    }
+    if (settingsCategory == 5) {
+      if (y >= 54 && y < 103) {
+        uint32_t now = millis();
+        if (now - versionTapWindow > 2200) versionTapCount = 0;
+        versionTapWindow = now; versionTapCount++;
+        if (versionTapCount >= 5) { versionTapCount = 0; showDeveloperPinPage(); }
+      } else if (y >= 110 && y < 159) showFactoryResetPage();
+    }
   } else if (screen == S_SDCARD) {
     if (!readTouch(x, y)) return;
     if (swipeBackDetected) { swipeBackDetected = false; showSettingsPage(); return; }
