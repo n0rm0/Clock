@@ -14,7 +14,7 @@ Source code is kept in  <Documents>\\ClockOSV1\\<name>\\<name>.ino  so you can e
 Files in your Downloads (.ino / .h) are MOVED there (never copied).
 "python install.py update" = refresh the SD card from GitHub only (no wipe, no icons).
 """
-import os, sys, re, json, shutil, stat, threading, ctypes, subprocess, urllib.request, zipfile, tempfile
+import os, sys, re, json, shutil, stat, threading, ctypes, subprocess, urllib.request, zipfile, tempfile, glob
 
 import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog, filedialog
@@ -627,10 +627,10 @@ def find_cli():
     return os.path.join(dst, "arduino-cli.exe")
 
 
-def run_cli(cli, args, lo, hi, label):
-    """Run arduino-cli hidden; creep the bar from lo to hi while it prints."""
+def run_command(command, lo, hi, label):
+    """Run a tool hidden; creep the bar from lo to hi while it prints."""
     prog(lo, label)
-    p = subprocess.Popen([cli] + args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+    p = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                          text=True, errors="replace", creationflags=NO_WINDOW)
     tail, cur = [], lo
     for line in p.stdout:
@@ -644,6 +644,27 @@ def run_cli(cli, args, lo, hi, label):
     if p.returncode != 0:
         raise RuntimeError("%s failed:\n%s" % (label, "\n".join(tail)))
     return "\n".join(tail)
+
+
+def run_cli(cli, args, lo, hi, label):
+    return run_command([cli] + args, lo, hi, label)
+
+
+def esptool_command():
+    """Find the esptool bundled with the ESP32 Arduino core, or use Python's module."""
+    roots = []
+    for base in (os.environ.get("LOCALAPPDATA", ""), os.environ.get("APPDATA", ""),
+                 os.path.expanduser("~/.arduino15")):
+        if base:
+            roots.append(os.path.join(base, "Arduino15", "packages", "esp32", "tools"))
+            roots.append(os.path.join(base, "packages", "esp32", "tools"))
+    for root in roots:
+        for pattern in ("**/esptool.exe", "**/esptool.py", "**/esptool"):
+            matches = glob.glob(os.path.join(root, pattern), recursive=True)
+            if matches:
+                path = matches[-1]
+                return [python_executable(), path] if path.lower().endswith(".py") else [path]
+    return [python_executable(), "-m", "esptool"]
 
 
 def serial_ports(cli):
@@ -705,16 +726,15 @@ def download_latest_binary():
 
 
 def flash_binary(cli, binary, port, label):
-    """Upload a downloaded .bin through arduino-cli without compiling it."""
-    folder = tempfile.mkdtemp(prefix="clock_flash_")
-    try:
-        stem = os.path.splitext(os.path.basename(binary))[0]
-        cli_binary = os.path.join(folder, stem + ".ino.bin")
-        shutil.copy2(binary, cli_binary)
-        run_cli(cli, ["upload", "--fqbn", FQBN, "-p", port, "--input-dir", folder],
-                88, 99, "Flashing %s to %s" % (label, port))
-    finally:
-        shutil.rmtree(folder, ignore_errors=True)
+    """Flash an application-only .bin into the existing ESP32 OTA app slot.
+
+    Arduino CLI upload expects bootloader and partition artifacts beside the
+    application. Auto mode intentionally downloads only the application, so
+    use esptool directly at the normal ESP32 app offset instead.
+    """
+    command = esptool_command() + ["--chip", "esp32", "--port", port,
+                                   "write_flash", "0x10000", binary]
+    run_command(command, 88, 99, "Flashing %s to %s" % (label, port))
 
 
 def build_sketches(cli, sketches):

@@ -135,6 +135,7 @@ This checklist reflects the requirements in [`agent.md`](agent.md) and the files
 - [x] Preserve SD-card JSON files during installer wipes and store the OAuth client as `/data/secrets/classroomsecret.json`.
 - [x] Add the Apple-style Appearance tab with Crystal, Midnight, Ocean, Sunrise, and Graphite theme packages under `.source/themes/appearance/`; persist the selected theme and install the catalog to the SD card.
 - [ ] Test the updated `.bat` on Windows: OAuth JSON auto-detection, school-account sign-in, SD-card secret/cache placement, flashing, and headless launcher behavior.
+- [~] Fix Auto flashing of an application-only `.bin`: use direct esptool flashing at `0x10000` instead of making Arduino CLI search for a nonexistent `.ino.bootloader.bin`.
 
 ## Deferred ClockOSV1/V2.5 release and UI work
 
