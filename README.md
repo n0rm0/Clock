@@ -2,9 +2,11 @@
 
 ESP32 clock project for the Hosyond 4-inch ESP32-32E display.
 
-The current firmware iteration is **ClockOSV1**. The Arduino compatibility
-folder remains `updateV1` so existing SD-card and installer workflows continue
-to work; release binaries are versioned as ClockOS artifacts inside that slot.
+**ClockOSV1** remains the stable legacy release in the `updateV1` compatibility
+slot. **ClockOSv2.5** is the current compiled release candidate: it has a
+same-name Arduino sketch folder, matching raw-source tree, verified application
+binary, and release manifest. See [the release policy](.source/releases/README.md)
+before changing a version.
 
 ## Repository layout
 
@@ -14,15 +16,18 @@ Raw source and compiled firmware use matching versioned paths. Each Arduino sket
 .source/
 ├── compiled/                 # only verified .bin files
 │   ├── bootloader/fallback/bootloaderV1/
-│   └── updates/updateV1/
+│   └── updates/
+│       ├── updateV1/ClockOSV1.bin
+│       └── ClockOSv2.5/ClockOSv2.5.bin
 ├── install/                  # GitHub-downloaded launcher and installer
 ├── touch_test/               # standalone raw-touch coordinate sketch
 │   └── touch_test.ino
 └── uncompiled/               # raw files for download and editing
     ├── bootloader/fallback/bootloaderV1/
     │   └── bootloaderV1.ino
-    └── updates/updateV1/
-        └── updateV1.ino
+    └── updates/
+        ├── updateV1/updateV1.ino
+        └── ClockOSv2.5/ClockOSv2.5.ino
 ```
 
 The clock fetches the newest update from `.source/compiled/updates/`. ClockOS
@@ -30,7 +35,8 @@ shows an Apple-style Software Update card while checking and installing, with a
 rounded progress bar, release identity, status text, and safe failure fallback.
 The `.bat` launcher downloads `.source/install/install.py` from GitHub and
 installs user-scoped Python with `winget` when Python is missing. The Python
-installer fetches the raw `updateV1` source and downloads/converts Meteocons
+installer reads the release manifest and fetches the newest same-name raw clock
+source (`ClockOSv*` or legacy `updateV*`), then downloads/converts Meteocons
 weather icons.
 
 The installer has three modes. **Auto (recommended)** downloads and flashes only the newest compiled clock application `.bin` from `.source/compiled/updates/`; it never downloads the fallback bootloader. **Beta (unstable)** downloads the newest raw update sketch and compiles only that clock application, rather than stale `clock` or bootloader folders left on the computer. **Manual** lets you select a folder containing the `.ino` and `.h` files to compile, including a bootloader sketch only when explicitly selected. Successful compile-only clock binaries are saved as `Downloads/ClockBuilds/<sketch>.bin`.
@@ -39,11 +45,18 @@ When flashing a compiled sketch, the installer shows a visible **Flash device** 
 
 Raw sketches installed to an SD card are placed under `.source/uncompiled/updates/<version>/` or `.source/uncompiled/bootloader/fallback/<version>/`; no root-level `updateV1` folder or `extras` folder is created.
 
-The compiled tree must contain only real `.bin` files. The ClockOSV1 binary is
-added only after a successful Arduino CLI build. See [.agent/todo.md](.agent/todo.md)
-for validation items.
+The compiled tree contains only real `.bin` files. `ClockOSv2.5.bin` was built
+with Arduino CLI, ESP32 core 2.0.17, TFT_eSPI, PNGdec, and ArduinoJson; its
+matching raw source is published under the same-name `ClockOSv2.5/` folder. See
+[`.source/releases/ClockOSv2.5.md`](.source/releases/ClockOSv2.5.md) and
+[`.agent/todo.md`](.agent/todo.md) for the validation record and remaining
+physical-device checks.
 
-The display is now set to rotation `3` (180°). The latest official TFT_eSPI calibration output `{365, 3431, 321, 3368, 7}` is hardwired into the clock firmware, so it uses that mapping directly and does not launch the calibration screen or overwrite it from the SD card. The standalone touch test remains available at [.source/touch_test/touch_test.ino](.source/touch_test/touch_test.ino) if the panel is replaced.
+ClockOSv2.5 uses display rotation `3` (180°) with the supplied TFT_eSPI touch
+calibration `{343, 3436, 266, 3381, 1}`. It does not overwrite that mapping from
+the SD card. Physical corner/center calibration and final orientation checks
+remain open; the standalone touch test is available at
+[`.source/touch_test/touch_test.ino`](.source/touch_test/touch_test.ino).
 
 After Wi-Fi connects, the clock obtains an approximate location from the network's public IP and requests current conditions from Open-Meteo. Weather icons are loaded from `/.source/icons/`; if an icon is missing, the firmware draws a visible fallback icon instead of showing a blank panel. Tapping the clock/time panel opens the alarm editor, where you can set any time, date, one-time alarm, or repeating days, then save or disable it. Active alarms can be dismissed by tapping the screen.
 
@@ -53,7 +66,7 @@ Preferences are stored as JSON only when an SD card is detected, under
 `/data/preferences/` (`settings.json`, `alarm.json`, `wifi.json`, and
 `touch.json`). If no SD card is inserted, ClockOS does not save preferences;
 the current session continues with in-memory defaults. Classroom secrets and
-the read-only cache remain under the protected `.source/data/secrets/` area.
+the read-only cache remain under the protected `/data/secrets/` area.
 The SD-card icon is filled for a valid ClockOS card, outline-only when no card
 is present, and marked with an X when a card is inserted but not prepared.
 Settings > SD Card can prepare the ClockOS folder layout, preserve current

@@ -30,7 +30,7 @@ This checklist reflects the requirements in [`agent.md`](agent.md) and the files
 
 - [x] Add the upper-right weather icon and outdoor temperature.
 
-- [ ] Keep temperature and conditions sourced from the outside/local weather service; do not add indoor room temperature or humidity sensors.
+- [x] Keep temperature and conditions sourced from the outside/local weather service; do not add indoor room temperature or humidity sensors.
 
 - [x] Add Wi-Fi configuration without committing credentials, API keys, or private location data.
 
@@ -238,9 +238,9 @@ This checklist reflects the requirements in [`agent.md`](agent.md) and the files
 
 - [ ] Rename the public Arduino application identity from `updateV1` to `ClockOSV1` without breaking Arduino IDE same-name sketch rules, SD update discovery, or the fallback bootloader path.
 
-- [ ] Define and apply the release increment policy: small fixes increment by `+0.1`, major feature releases increment by `+1`, and compiled/uncompiled folders, firmware identity, installer labels, and update metadata stay synchronized.
+- [x] Define and apply the release increment policy: small fixes increment by `+0.1`, major feature releases increment by `+1`, and compiled/uncompiled folders, firmware identity, installer labels, and update metadata stay synchronized.
 
-- [ ] Create and compile the next firmware release as `ClockOSv2.5.bin` and publish matching uncompiled source under a same-name `ClockOSv2.5/` sketch folder after the version policy is confirmed.
+- [x] Create and compile the next firmware release as `ClockOSv2.5.bin` and publish matching uncompiled source under a same-name `ClockOSv2.5/` sketch folder after the version policy is confirmed.
 
 - [ ] Add a clock icon to the Tkinter window title bar and verify it works on Windows 10 and Windows 11 without briefly opening a console.
 
@@ -277,3 +277,11 @@ This checklist reflects the requirements in [`agent.md`](agent.md) and the files
 - [ ] Remove Offline Mode from the normal Settings list and keep offline behavior accessible only through the appropriate setup/developer flow.
 
 - [ ] Replace the unattractive blue welcome screen with a minimal Apple StandBy-inspired welcome/setup screen.
+
+> **ClockOSv2.5 implementation note — 2026-10-10:** The V2.5 firmware UI,
+> installer metadata/layout support, raw same-name source tree, release manifest,
+> ClockOS-style title-bar icon, and application binary are implemented. The
+> firmware compiled successfully with Arduino CLI, ESP32 core 2.0.17,
+> TFT_eSPI, PNGdec, and ArduinoJson. Items that require physical display,
+> touch, OTA, or Windows 10/11 execution validation remain unchecked until
+> they are tested on the target hardware/OS.
