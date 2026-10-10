@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "productName": "ClockOS",
+  "displayVersion": "v2.5",
+  "firmwareIdentity": "ClockOSv2.5",
+  "sketch": "ClockOSv2.5",
+  "rawSourcePath": ".source/uncompiled/updates/ClockOSv2.5",
+  "binaryPath": ".source/compiled/updates/ClockOSv2.5/ClockOSv2.5.bin",
+  "binaryBytes": 1139264,
+  "sha256": "e101a7fb21c6a509f87f6ab378db2545dff88ec2ee12a0b5c65e7e1ca7eca97f",
+  "releaseType": "major",
+  "releasePolicy": "Small fixes increment the decimal version by 0.1; major feature releases increment the major version by 1.0. Firmware identity, same-name Arduino sketch folder, compiled and uncompiled update trees, installer label, and this metadata must use the same release value.",
+  "previousStableRelease": "ClockOSV1"
+}

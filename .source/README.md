@@ -6,7 +6,9 @@ The repository keeps raw editable files in `uncompiled/` and the firmware update
 .source/
 ├── compiled/                         # contains only .bin files when builds exist
 │   ├── bootloader/fallback/bootloaderV1/
-│   └── updates/updateV1/
+│   └── updates/
+│       ├── updateV1/ClockOSV1.bin
+│       └── ClockOSv2.5/ClockOSv2.5.bin
 ├── install/
 │   ├── install.py
 │   └── setup_sd.bat
@@ -19,6 +21,10 @@ The repository keeps raw editable files in `uncompiled/` and the firmware update
         ├── updateV1.ino
         ├── bootloader.h
         └── config.h
+    └── updates/ClockOSv2.5/
+        ├── ClockOSv2.5.ino
+        ├── bootloader.h
+        └── config.h
 ```
 
-Each Arduino sketch is in a same-name folder so Arduino IDE can open it directly. The compiled tree is intentionally empty until real `.bin` files are built; Git cannot preserve empty directories without adding a non-binary placeholder, so the directory layout is documented here and created by the installer when needed.
+Each Arduino sketch is in a same-name folder so Arduino IDE can open it directly. The installer recognizes both legacy `updateV*` and current `ClockOSv*` application folders, while excluding bootloader sketches from automatic selection. The compiled tree contains only verified application `.bin` files; release identities and paths are defined in `.source/releases/current.json`.
