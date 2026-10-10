@@ -6,8 +6,8 @@ Compact setup window: choose an SD card, firmware mode, and optional actions:
   Auto (recommended)        - download and flash the newest compiled .bin from GitHub
   Beta (unstable)            - download the newest raw sketches and compile them
   Manual                     - choose a folder of .ino/.h files and compile those sketches
-  SD install                 - optionally wipe/install source and icons on a selected SD card
-  Classroom notifications    - authorize before the wipe, then save read-only cache/tokens under /data/secrets
+  SD install                 - prepare a selected SD card; full erase is explicit opt-in
+  Classroom notifications    - authorize before install; save read-only cache/tokens under /data/secrets
 When it finishes the window closes by itself.
 
 Source code is kept in  <Documents>\\ClockOSV1\\<name>\\<name>.ino  so you can edit it.
@@ -25,11 +25,11 @@ SOURCE_ROOT = ".source/uncompiled/updates"
 # setup useful and predictable if GitHub is unavailable or the manifest is bad.
 DEFAULT_RELEASE = {
     "productName": "ClockOS",
-    "displayVersion": "v2.7",
-    "firmwareIdentity": "ClockOSv2.7",
-    "sketch": "ClockOSv2.7",
-    "rawSourcePath": ".source/uncompiled/updates/ClockOSv2.7",
-    "binaryPath": ".source/compiled/updates/ClockOSv2.7/ClockOSv2.7.bin",
+    "displayVersion": "v2.8",
+    "firmwareIdentity": "ClockOSv2.8",
+    "sketch": "ClockOSv2.8",
+    "rawSourcePath": ".source/uncompiled/updates/ClockOSv2.8",
+    "binaryPath": ".source/compiled/updates/ClockOSv2.8/ClockOSv2.8.bin",
 }
 RELEASE = dict(DEFAULT_RELEASE)
 PRODUCT_NAME = DEFAULT_RELEASE["productName"]
@@ -503,52 +503,31 @@ def _rm(func, path, _exc):
     func(path)
 
 
-def preserve_json_files(root):
-    """Copy every JSON file aside before a wipe so secrets/configs can return."""
-    stage = tempfile.mkdtemp(prefix="clock_sd_json_")
-    for current, dirs, files in os.walk(root):
-        dirs[:] = [d for d in dirs if d.lower() not in ("system volume information", "$recycle.bin")]
-        for name in files:
-            if not name.lower().endswith(".json"):
-                continue
-            src = os.path.join(current, name)
-            rel = os.path.relpath(src, root)
-            dst = os.path.join(stage, rel)
-            os.makedirs(os.path.dirname(dst), exist_ok=True)
-            try:
-                shutil.copy2(src, dst)
-            except OSError:
-                pass
-    return stage
-
-
-def restore_json_files(root, stage):
-    if not stage or not os.path.isdir(stage):
-        return 0
-    count = 0
-    for current, _, files in os.walk(stage):
-        for name in files:
-            src = os.path.join(current, name)
-            rel = os.path.relpath(src, stage)
-            dst = os.path.join(root, rel)
-            os.makedirs(os.path.dirname(dst), exist_ok=True)
-            shutil.copy2(src, dst)
-            count += 1
-    return count
-
-
-def wipe(root):
-    for e in os.scandir(root):
-        if e.name.lower() in ("system volume information", "$recycle.bin"):
+def wipe_card_contents(root):
+    """Erase non-Windows-managed card contents and verify the wipe completed."""
+    root = os.path.abspath(root)
+    if not os.path.isdir(root):
+        raise RuntimeError("Selected SD-card root is not accessible: %s" % root)
+    exempt = {"system volume information", "$recycle.bin"}
+    failures = []
+    for entry in os.scandir(root):
+        if entry.name.lower() in exempt:
             continue
         try:
-            if e.is_dir(follow_symlinks=False):
-                shutil.rmtree(e.path, onerror=_rm)
+            if entry.is_dir(follow_symlinks=False):
+                shutil.rmtree(entry.path, onerror=_rm)
             else:
-                os.chmod(e.path, stat.S_IWRITE)
-                os.remove(e.path)
-        except Exception:
-            pass
+                try:
+                    os.chmod(entry.path, stat.S_IWRITE)
+                except OSError:
+                    pass
+                os.remove(entry.path)
+        except Exception as exc:
+            failures.append("%s (%s)" % (entry.name, exc))
+    remaining = [entry.name for entry in os.scandir(root) if entry.name.lower() not in exempt]
+    if failures or remaining:
+        detail = failures + ["still present: %s" % name for name in remaining if name not in failures]
+        raise RuntimeError("Could not completely erase the SD card. No ClockOS files were installed. " + "; ".join(detail[:12]))
 
 
 CLOCKOS_SD_DIRECTORIES = (
@@ -982,9 +961,9 @@ def build_and_flash(mode, do_flash, ask_port, ask_target, selected_port=None):
 # ------------------------------------------------------------------ the whole job
 def work(opts, ask_port, ask_target):
     classroom_stage = None
-    preserved_json = None
     try:
-        drive, mode, do_dl, do_fl, update_only, manual, selected_port, classroom_enabled, credentials_path = opts
+        drive, mode, do_dl, do_fl, update_only, manual, selected_port, classroom_enabled, credentials_path, erase_requested = opts
+        erase_requested = bool(erase_requested and do_dl and not update_only)
         n = m = 0
         inos = []
         if mode in ("beta", "manual") or do_dl:
@@ -1002,15 +981,13 @@ def work(opts, ask_port, ask_target):
             count, events = classroom_setup(credentials_path, classroom_stage)
             S.summary.append("Google Classroom: %d assignments, %d calendar events saved" % (count, events))
         if do_dl:
-            if not update_only:
-                prog(8, "Erasing SD card...")
-                preserved_json = preserve_json_files(drive)
-                wipe(drive)
+            if erase_requested:
+                if not safe_to_wipe(drive):
+                    raise RuntimeError("The selected drive is not a verified removable SD card; erase stopped.")
+                prog(8, "Erasing selected SD-card files...")
+                wipe_card_contents(drive)
             prog(15, "Creating folders on the SD card...")
             structure(drive)
-            if preserved_json:
-                restored = restore_json_files(drive, preserved_json)
-                S.summary.append("Preserved JSON files: %d" % restored)
             put_on_sd(drive, workspace())
             if classroom_stage:
                 target = os.path.join(drive, SECRETS_DIR)
@@ -1039,8 +1016,6 @@ def work(opts, ask_port, ask_target):
     finally:
         if classroom_stage:
             shutil.rmtree(classroom_stage, ignore_errors=True)
-        if preserved_json:
-            shutil.rmtree(preserved_json, ignore_errors=True)
         S.done = True
 
 
@@ -1157,9 +1132,11 @@ def main():
     load_release_manifest()
 
     root.title("%s Setup" % PRODUCT_NAME)
-    root.geometry("640x460")
-    root.resizable(False, False)
-    root.attributes("-topmost", True)
+    screen_w, screen_h = root.winfo_screenwidth(), root.winfo_screenheight()
+    window_w, window_h = min(960, max(760, screen_w - 64)), min(680, max(520, screen_h - 120))
+    root.geometry("%dx%d" % (window_w, window_h))
+    root.minsize(min(760, screen_w - 32), min(520, screen_h - 80))
+    root.resizable(True, True)
     root.configure(bg="#0F0F10")
 
     shell = tk.Frame(root, bg="#0F0F10")
@@ -1244,6 +1221,25 @@ def main():
     v_dl = tk.BooleanVar(value=False)
     ttk.Checkbutton(sd_card, text="Install source, icons, and themes", variable=v_dl,
                     style="Card.TCheckbutton").pack(anchor="w", pady=(2, 0))
+    erase_var = tk.BooleanVar(value=False)
+    erase_check = ttk.Checkbutton(sd_card, text="ERASE ALL existing files on this card before installing",
+                                  variable=erase_var, style="Card.TCheckbutton")
+    erase_check.pack(anchor="w", pady=(3, 0))
+    def update_erase_control(*_unused):
+        if update_only or not v_dl.get():
+            erase_var.set(False)
+            erase_check.state(["disabled"])
+        else:
+            # The user explicitly asked to clear mixed/stale SD contents. Arm
+            # that requested clean install when SD installation is enabled;
+            # keep the choice visible and reversible before the two warnings.
+            if not erase_var.get():
+                erase_var.set(True)
+            erase_check.state(["!disabled"])
+    v_dl.trace_add("write", update_erase_control)
+    update_erase_control()
+    ttk.Label(sd_card, text="The requested clean install erases old and unrelated files; uncheck to preserve them. Never formats the card.",
+              style="CardHint.TLabel").pack(anchor="w", pady=(1, 0))
 
     classroom_card = card(inner, "Classroom notifications")
     classroom_var = tk.BooleanVar(value=False)
@@ -1324,8 +1320,8 @@ def main():
 
     ttk.Button(device_row, text="Refresh", style="Quiet.TButton", command=refresh_devices).pack(side="left", padx=(7, 0))
 
-    action = ttk.Frame(inner, style="Card.TFrame", padding=(12, 8))
-    action.pack(fill="both", expand=True)
+    action = ttk.Frame(content, style="Card.TFrame", padding=(16, 10))
+    action.pack(side="bottom", fill="x", padx=16, pady=(0, 14))
     status = ttk.Label(action, text="READY", style="CardHint.TLabel")
     status.pack(anchor="w")
     bar = ttk.Progressbar(action, maximum=100, style="Setup.Horizontal.TProgressbar")
@@ -1366,6 +1362,13 @@ def main():
         if S.done:
             if S.error:
                 messagebox.showerror("Clock Setup", S.error, parent=root)
+                status["text"] = "NEEDS ATTENTION — review the error and try again"
+                start.configure(text="TRY AGAIN")
+                start.state(["!disabled"])
+                combo.state(["!disabled"])
+                device_combo.state(["!disabled"])
+                for button in mode_buttons.values():
+                    button.configure(state="normal")
             else:
                 status["text"] = "DONE"
                 root.after(1500, root.destroy)
@@ -1375,6 +1378,7 @@ def main():
     def go():
         selected_mode = mode.get()
         do_dl, do_fl = v_dl.get(), v_fl.get()
+        erase_requested = bool(do_dl and erase_var.get() and not update_only)
         classroom_enabled = classroom_var.get()
         credentials_path = classroom_path["value"]
         if classroom_enabled:
@@ -1396,17 +1400,17 @@ def main():
                 messagebox.showwarning("Clock Setup", "Pick the SD card first.", parent=root)
                 return
             drive = drives[i][0]
-            if not update_only and not safe_to_wipe(drive):
+            if erase_requested and not safe_to_wipe(drive):
                 messagebox.showerror("Clock Setup", "%s is not a removable drive. Nothing was changed." % drive,
                                      parent=root)
                 return
-            if not update_only:
+            if erase_requested:
                 if not messagebox.askokcancel("WARNING 1 of 2",
-                                               "%s will be erased before files are written. Continue?" % drives[i][1],
+                                               "ERASE ALL existing files on %s, including ClockOS settings, Classroom data, and unrelated files?" % drives[i][1],
                                                parent=root):
                     return
                 if not messagebox.askyesno("WARNING 2 of 2",
-                                            "Erase %s and continue? This cannot be undone." % drive,
+                                            "Permanently delete the files on %s now? The card will not be formatted." % drive,
                                             default="no", parent=root):
                     return
 
@@ -1444,7 +1448,7 @@ def main():
             button.configure(state="disabled")
         threading.Thread(target=work,
                          args=((drive, selected_mode, do_dl, do_fl, update_only, manual, selected_port,
-                                classroom_enabled, credentials_path),
+                                classroom_enabled, credentials_path, erase_requested),
                                ask_port,
                                lambda sketches, default: ask_sketch(sketches, root, default)),
                          daemon=True).start()

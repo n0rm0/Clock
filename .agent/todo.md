@@ -288,3 +288,17 @@ This checklist reflects the requirements in [`agent.md`](agent.md) and the files
 > backlight sleep/wake are implemented and build-validated with ESP32 core 2.0.17,
 > TFT_eSPI, PNGdec, and ArduinoJson. Physical display/touch/OTA/backlight checks,
 > and Windows 10/11 installer execution still require the target hardware/OS.
+
+
+## Follow-up fixes — 2026-10-10
+
+- [x] Add an explicit Windows SD erase option selected when SD install is enabled, per the requested clean-card behavior; normal prepare/install preserves unrelated files, explicit erase removes stale and mixed files (except Windows-managed metadata), and deletion failures stop installation.
+- [x] Remove silent JSON preservation/restoration so old preferences and Classroom secrets do not return after an intentional erase.
+- [x] Make installer window resizable with a protected bottom action footer; recover Start and locked controls after failures.
+- [x] Replace the device Settings sidebar with a grouped full-width category list and touch-sized category/detail rows; preserve calibration and display rotation.
+- [x] Build a new ClockOSv2.8 application `.bin`, record its size/hash, and include Settings markers in the built image.
+- [x] Add regression tests for clean wipe semantics, metadata exemptions, failed deletion, opt-in safeguards, release manifest integrity, and compiled Settings markers.
+- [ ] Validate Settings layout/touch response on the physical Hosyond display; hardware is not attached to this sandbox.
+- [ ] Validate Windows installer DPI scaling and Start retry flow on Windows 10/11; no Windows GUI is available in this sandbox.
+
+> **Current status:** Source changes and the v2.8 ESP32 binary are built; all seven automated tests pass, and `esptool.py` confirms a valid image checksum/validation hash matching both manifests. Physical-device and native Windows UI checks remain open.
