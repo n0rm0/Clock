@@ -149,3 +149,20 @@ This checklist reflects the requirements in [`agent.md`](agent.md) and the files
 - [ ] Add a clock icon to the Tkinter window title bar and verify it works on Windows 10 and Windows 11 without briefly opening a console.
 - [ ] Redesign the Tkinter installer window to be smaller, cleaner, and more Apple-like: reduce oversized text, use a restrained neutral palette, and move primary actions into a tidy sidebar.
 - [ ] Keep the current ClockOSV1 release stable while the V2.5 source, binary, installer UI, and release assets are implemented and tested.
+
+## Deferred Apple-style UI and behavior fixes
+
+- [ ] Rework icon layout and alignment: center weather icons consistently, remove awkward-looking variants, and make all status icons share a clean visual scale.
+- [ ] Fix SD-card status detection so a correctly inserted/ClockOS-formatted card shows a valid status instead of an X; keep absent, invalid, and ready states distinct.
+- [ ] Redesign the status row so the battery matches the Wi-Fi icon size and the SD-card icon sits directly beside the Wi-Fi/battery group.
+- [ ] Redesign the alarm screen as a clean Apple-style list/spinner editor with multiple alarms, enable/disable controls, AM/PM or 24-hour support, and no crowded controls.
+- [ ] Fix alarm time layout: move the date upward when AM/PM is enabled, keep AM/PM visible after selection, remove unnecessary lines, and move the clock slightly upward on the home screen.
+- [ ] Reduce oversized typography throughout the firmware and scale/wrap Wi-Fi, weather, calendar, settings, and alarm text so it never clips or runs off-screen.
+- [ ] Stop unnecessary screen flashing: update only changed fields, especially password text boxes and Wi-Fi controls, instead of redrawing the whole page.
+- [ ] Repair the Wi-Fi signal animation so the Wi-Fi symbol visibly updates/spins while connecting and remains stable when connected.
+- [ ] Make the default weather location Philadelphia and remove any unwanted settings icon/placeholder; preserve manual city and automatic location choices.
+- [ ] Make display sleep turn the panel fully black and restore the previous screen correctly on touch wake; do not flash white.
+- [ ] Remove the profile and SD-card icons from the Calendar page while retaining them only where they belong in the global navigation/header.
+- [ ] Redesign Calendar, Weather Settings, Wi-Fi Settings, SD Card, and Factory Reset pages into Apple-style grouped side-row navigation instead of cramped grids; make SD setup usable offline.
+- [ ] Remove Offline Mode from the normal Settings list and keep offline behavior accessible only through the appropriate setup/developer flow.
+- [ ] Replace the unattractive blue welcome screen with a minimal Apple StandBy-inspired welcome/setup screen.
