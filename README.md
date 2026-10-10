@@ -4,7 +4,7 @@ ESP32 clock project for the Hosyond 4-inch ESP32-32E display.
 
 **ClockOSV1** remains the stable legacy release. The canonical same-name
 `ClockOSV1/` source/binary alias is published alongside the preserved `updateV1`
-compatibility slot, so older SD-card and OTA paths keep working. **ClockOSv2.7** is the current compiled release candidate: it has a
+compatibility slot, so older SD-card and OTA paths keep working. **ClockOSv2.8** is the current compiled release candidate: it has a
 same-name Arduino sketch folder, matching raw-source tree, verified application
 binary, and release manifest. See [the release policy](.source/releases/README.md)
 before changing a version.
@@ -22,7 +22,8 @@ Raw source and compiled firmware use matching versioned paths. Each Arduino sket
 │       ├── ClockOSV1/ClockOSV1.bin
 │       ├── ClockOSv2.5/ClockOSv2.5.bin
 │       ├── ClockOSv2.6/ClockOSv2.6.bin
-│       └── ClockOSv2.7/ClockOSv2.7.bin
+│       ├── ClockOSv2.7/ClockOSv2.7.bin
+│       └── ClockOSv2.8/ClockOSv2.8.bin
 ├── install/                  # GitHub-downloaded launcher and installer
 ├── touch_test/               # standalone raw-touch coordinate sketch
 │   └── touch_test.ino
@@ -34,7 +35,8 @@ Raw source and compiled firmware use matching versioned paths. Each Arduino sket
         ├── ClockOSV1/ClockOSV1.ino
         ├── ClockOSv2.5/ClockOSv2.5.ino
         ├── ClockOSv2.6/ClockOSv2.6.ino
-        └── ClockOSv2.7/ClockOSv2.7.ino
+        ├── ClockOSv2.7/ClockOSv2.7.ino
+        └── ClockOSv2.8/ClockOSv2.8.ino
 ```
 
 The clock fetches the highest-version update from `.source/compiled/updates/`. Wi-Fi onboarding completes and saves settings before any automatic OTA check, so an update reboot cannot interrupt the first-run wizard. If an earlier firmware interrupted setup after Wi-Fi was saved, V2.6 resumes using those credentials. ClockOS
@@ -52,14 +54,14 @@ When flashing a compiled sketch, the installer shows a visible **Flash device** 
 
 Raw sketches installed to an SD card are placed under `.source/uncompiled/updates/<version>/` or `.source/uncompiled/bootloader/fallback/<version>/`; no root-level `updateV1` folder or `extras` folder is created.
 
-The compiled tree contains only real `.bin` files. `ClockOSv2.7.bin` was built
+The compiled tree contains only real `.bin` files. `ClockOSv2.8.bin` was built
 with Arduino CLI, ESP32 core 2.0.17, TFT_eSPI, PNGdec, and ArduinoJson; its
-matching raw source is published under the same-name `ClockOSv2.7/` folder. The installer and OTA updater choose the highest semantic-version valid application source or binary (so v2.10 outranks v2.9); neither automatically selects a bootloader or pins to an older manifest. See
-[`.source/releases/ClockOSv2.7.md`](.source/releases/ClockOSv2.7.md) and
+matching raw source is published under the same-name `ClockOSv2.8/` folder. The installer and OTA updater choose the highest semantic-version valid application source or binary (so v2.10 outranks v2.9); neither automatically selects a bootloader or pins to an older manifest. See
+[`.source/releases/ClockOSv2.8.md`](.source/releases/ClockOSv2.8.md) and
 [`.agent/todo.md`](.agent/todo.md) for the validation record and remaining
 physical-device checks.
 
-ClockOSv2.7 uses display rotation `3` (180°) with the supplied TFT_eSPI touch
+ClockOSv2.8 uses display rotation `3` (180°) with the supplied TFT_eSPI touch
 calibration `{343, 3436, 266, 3381, 1}`. It does not overwrite that mapping from
 the SD card. Physical corner/center calibration and final orientation checks
 remain open; the standalone touch test is available at
@@ -67,7 +69,7 @@ remain open; the standalone touch test is available at
 
 After Wi-Fi connects, the clock requests current conditions from Open-Meteo using Philadelphia by default; manual city selection remains available. It does not use ISP IP geolocation, which can incorrectly place a clock in a distant city. Weather is laid out as icon, temperature, and city, without a long condition label. Meteocons PNGs are loaded from `/.source/icons/`, with a built-in vector symbol drawn underneath so the icon remains visible if assets or PNG decoding fail.
 
-The home screen is interactive: tap the weather panel for location settings and city entry, the Wi-Fi icon for network management, the calendar panel for the extended calendar, and the battery/settings area for preferences. Settings now use an Apple/iPad-style sidebar with colored category icons, grouped rows, and switch controls. The display sleep routine explicitly drives the active-high GPIO27 backlight low and restores it on wake. System labels use a smaller FreeSans scale while the seven-segment clock remains large. A newly computer-formatted SD card is accepted and ClockOS creates its own required folders automatically without erasing unrelated files; the status indicator distinguishes card presence from readiness. The date is shown as `DD/MM/YYYY`; tapping it toggles 12/24-hour time. Offline startup opens a manual date/time editor because the ESP32 cannot recover the clock after a power loss without network time or an RTC.
+The home screen is interactive: tap the weather panel for location settings and city entry, the Wi-Fi icon for network management, the calendar panel for the extended calendar, and the battery/settings area for preferences. Settings now use an Apple Settings-inspired full-width grouped category list with category icons, hierarchical detail rows, consistent touch targets, and larger switch controls. The display sleep routine explicitly drives the active-high GPIO27 backlight low and restores it on wake. System labels use a smaller FreeSans scale while the seven-segment clock remains large. A newly computer-formatted SD card is accepted and ClockOS creates its own required folders automatically without erasing unrelated files; the status indicator distinguishes card presence from readiness. The date is shown as `DD/MM/YYYY`; tapping it toggles 12/24-hour time. Offline startup opens a manual date/time editor because the ESP32 cannot recover the clock after a power loss without network time or an RTC.
 
 Preferences are stored as JSON only when an SD card is detected, under
 `/data/preferences/` (`settings.json`, `alarm.json`, `wifi.json`, and
@@ -76,12 +78,13 @@ the current session continues with in-memory defaults. Classroom secrets and
 the read-only cache remain under the protected `/data/secrets/` area.
 The SD-card icon is filled for a valid ClockOS card, outline-only when no card
 is present, and marked with an X when a card is inserted but not prepared.
-Settings > SD Card and Windows Setup create the exact same root and `.source/`
-folder layout. The on-device action can save current settings, show capacity/used
-space, and open a read-only root file viewer; Windows Setup can additionally
-populate firmware, source, theme, and icon payloads. Neither directory-preparation
-path formats/repartitions the card or removes unrelated files. The optional Windows
-wipe path remains separate and user-selected.
+Settings > Storage and Windows Setup create the exact same root and `.source/`
+folder layout. Normal on-device and Windows preparation preserve unrelated files.
+Windows Setup has a separate **Erase all existing files** option, selected when SD installation is enabled (it can be unchecked); after
+two explicit confirmations it deletes the selected removable card’s existing files
+(except Windows-managed metadata), including old preferences, Classroom data, and
+unrelated files, then installs a fresh ClockOS layout. This does not format or
+repartition the card. Factory Reset on the clock remains a distinct ClockOS-data-only action.
 
 ClockOSV1 also includes an **Appearance** tab in Settings. Built-in theme
 packages live under `.source/themes/appearance/` and are installed to the same
@@ -90,7 +93,7 @@ location on the SD card. The initial catalog includes **Crystal**, **Midnight**,
 package, and the installer downloads the catalog so additional themes can be
 added in future releases without changing the SD-card layout.
 
-The Windows installer opens with a small branded **ClockOS Setup — Loading,
+The Windows installer opens in a resizable, roomier Settings-style window with a protected bottom Start/progress footer; the erase option is explicit and automatically selected when SD install is enabled, as requested; the user can uncheck it before proceeding. It opens with a small branded **ClockOS Setup — Loading,
 please wait…** dialog and an animated progress bar while the main setup window
 is initialized. This makes the hidden batch launcher feel intentional rather
 than appearing to run an unknown background process.
@@ -120,12 +123,11 @@ are warned and must not be paired.
 The profile control uses the supplied default Apple-style silhouette. Google
 authorization remains performed by the Windows Clock Setup flow; the OAuth
 client is stored on the SD card as `/data/secrets/classroomsecret.json`, with
-the token and cache alongside it. Before a destructive SD wipe, the installer
-copies all existing `.json` files aside and restores them afterward. Google may
+the token and cache alongside it. An explicitly selected destructive SD erase removes existing JSON files, including preferences and stored Classroom credentials; only credentials freshly authorized during the current installer run may be written afterward. Google may
 still display an organization-review or administrator approval message; that
 restriction must be resolved in Google Cloud/Workspace and cannot be bypassed
 by ClockOS.
 
-Enable **Google Classroom notifications** in the installer and choose the Desktop OAuth JSON from Google Cloud. The installer also checks common user folders (`Downloads`, `Documents`, `Desktop`, and the installer folder) for OAuth-shaped `.json` files and asks **“Is this the Google OAuth secrets file for Clock?”** before selecting one. It opens Google sign-in **before erasing or installing the SD card**; choose the school account, approve read-only Classroom/Calendar access, and the installer saves the private client/token plus `classroom_cache.json` under `.source/data/secrets/`. Do not commit those files to GitHub. The cache contains active courses, published assignments/projects, announcements, submission status data, and upcoming Google Calendar events. The firmware reads the cache at startup and refreshes the displayed assignment summary every second; run the installer again to perform a new Google sync.
+Enable **Google Classroom notifications** in the installer and choose the Desktop OAuth JSON from Google Cloud. The installer also checks common user folders (`Downloads`, `Documents`, `Desktop`, and the installer folder) for OAuth-shaped `.json` files and asks **“Is this the Google OAuth secrets file for Clock?”** before selecting one. It opens Google sign-in **before erasing or installing the SD card**; choose the school account, approve read-only Classroom/Calendar access, and the installer saves the private client/token plus `classroom_cache.json` under `/data/secrets/`. Do not commit those files to GitHub. The cache contains active courses, published assignments/projects, announcements, submission status data, and upcoming Google Calendar events. The firmware reads the cache at startup and refreshes the displayed assignment summary every second; run the installer again to perform a new Google sync.
 
 The home screen shows the nearest cached assignment or project and due date. The extended calendar lists the next cached items. The display sleeps after one minute without a touch and wakes on touch. Settings includes a two-tap **Factory reset** button that removes saved settings, Wi-Fi credentials, Classroom tokens, and the cached Classroom data before restarting.
