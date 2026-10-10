@@ -4,7 +4,7 @@ ESP32 clock project for the Hosyond 4-inch ESP32-32E display.
 
 **ClockOSV1** remains the stable legacy release. The canonical same-name
 `ClockOSV1/` source/binary alias is published alongside the preserved `updateV1`
-compatibility slot, so older SD-card and OTA paths keep working. **ClockOSv2.6** is the current compiled release candidate: it has a
+compatibility slot, so older SD-card and OTA paths keep working. **ClockOSv2.7** is the current compiled release candidate: it has a
 same-name Arduino sketch folder, matching raw-source tree, verified application
 binary, and release manifest. See [the release policy](.source/releases/README.md)
 before changing a version.
@@ -21,7 +21,8 @@ Raw source and compiled firmware use matching versioned paths. Each Arduino sket
 │       ├── updateV1/ClockOSV1.bin  # legacy slot
 │       ├── ClockOSV1/ClockOSV1.bin
 │       ├── ClockOSv2.5/ClockOSv2.5.bin
-│       └── ClockOSv2.6/ClockOSv2.6.bin
+│       ├── ClockOSv2.6/ClockOSv2.6.bin
+│       └── ClockOSv2.7/ClockOSv2.7.bin
 ├── install/                  # GitHub-downloaded launcher and installer
 ├── touch_test/               # standalone raw-touch coordinate sketch
 │   └── touch_test.ino
@@ -32,7 +33,8 @@ Raw source and compiled firmware use matching versioned paths. Each Arduino sket
         ├── updateV1/updateV1.ino  # legacy-compatible sketch
         ├── ClockOSV1/ClockOSV1.ino
         ├── ClockOSv2.5/ClockOSv2.5.ino
-        └── ClockOSv2.6/ClockOSv2.6.ino
+        ├── ClockOSv2.6/ClockOSv2.6.ino
+        └── ClockOSv2.7/ClockOSv2.7.ino
 ```
 
 The clock fetches the highest-version update from `.source/compiled/updates/`. Wi-Fi onboarding completes and saves settings before any automatic OTA check, so an update reboot cannot interrupt the first-run wizard. If an earlier firmware interrupted setup after Wi-Fi was saved, V2.6 resumes using those credentials. ClockOS
@@ -50,14 +52,14 @@ When flashing a compiled sketch, the installer shows a visible **Flash device** 
 
 Raw sketches installed to an SD card are placed under `.source/uncompiled/updates/<version>/` or `.source/uncompiled/bootloader/fallback/<version>/`; no root-level `updateV1` folder or `extras` folder is created.
 
-The compiled tree contains only real `.bin` files. `ClockOSv2.6.bin` was built
+The compiled tree contains only real `.bin` files. `ClockOSv2.7.bin` was built
 with Arduino CLI, ESP32 core 2.0.17, TFT_eSPI, PNGdec, and ArduinoJson; its
-matching raw source is published under the same-name `ClockOSv2.6/` folder. The installer and OTA updater choose the highest semantic-version valid application source or binary (so v2.10 outranks v2.9); neither automatically selects a bootloader or pins to an older manifest. See
-[`.source/releases/ClockOSv2.6.md`](.source/releases/ClockOSv2.6.md) and
+matching raw source is published under the same-name `ClockOSv2.7/` folder. The installer and OTA updater choose the highest semantic-version valid application source or binary (so v2.10 outranks v2.9); neither automatically selects a bootloader or pins to an older manifest. See
+[`.source/releases/ClockOSv2.7.md`](.source/releases/ClockOSv2.7.md) and
 [`.agent/todo.md`](.agent/todo.md) for the validation record and remaining
 physical-device checks.
 
-ClockOSv2.6 uses display rotation `3` (180°) with the supplied TFT_eSPI touch
+ClockOSv2.7 uses display rotation `3` (180°) with the supplied TFT_eSPI touch
 calibration `{343, 3436, 266, 3381, 1}`. It does not overwrite that mapping from
 the SD card. Physical corner/center calibration and final orientation checks
 remain open; the standalone touch test is available at
@@ -74,10 +76,12 @@ the current session continues with in-memory defaults. Classroom secrets and
 the read-only cache remain under the protected `/data/secrets/` area.
 The SD-card icon is filled for a valid ClockOS card, outline-only when no card
 is present, and marked with an X when a card is inserted but not prepared.
-Settings > SD Card can prepare the ClockOS folder layout, preserve current
-settings, show capacity/used space, and open a read-only root file viewer.
-The prepare action does not erase unrelated files; weather icons are installed
-by the Windows setup tool.
+Settings > SD Card and Windows Setup create the exact same root and `.source/`
+folder layout. The on-device action can save current settings, show capacity/used
+space, and open a read-only root file viewer; Windows Setup can additionally
+populate firmware, source, theme, and icon payloads. Neither directory-preparation
+path formats/repartitions the card or removes unrelated files. The optional Windows
+wipe path remains separate and user-selected.
 
 ClockOSV1 also includes an **Appearance** tab in Settings. Built-in theme
 packages live under `.source/themes/appearance/` and are installed to the same

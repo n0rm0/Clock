@@ -25,11 +25,11 @@ SOURCE_ROOT = ".source/uncompiled/updates"
 # setup useful and predictable if GitHub is unavailable or the manifest is bad.
 DEFAULT_RELEASE = {
     "productName": "ClockOS",
-    "displayVersion": "v2.6",
-    "firmwareIdentity": "ClockOSv2.6",
-    "sketch": "ClockOSv2.6",
-    "rawSourcePath": ".source/uncompiled/updates/ClockOSv2.6",
-    "binaryPath": ".source/compiled/updates/ClockOSv2.6/ClockOSv2.6.bin",
+    "displayVersion": "v2.7",
+    "firmwareIdentity": "ClockOSv2.7",
+    "sketch": "ClockOSv2.7",
+    "rawSourcePath": ".source/uncompiled/updates/ClockOSv2.7",
+    "binaryPath": ".source/compiled/updates/ClockOSv2.7/ClockOSv2.7.bin",
 }
 RELEASE = dict(DEFAULT_RELEASE)
 PRODUCT_NAME = DEFAULT_RELEASE["productName"]
@@ -551,16 +551,32 @@ def wipe(root):
             pass
 
 
+CLOCKOS_SD_DIRECTORIES = (
+    ".source",
+    ".source/compiled",
+    ".source/compiled/updates",
+    ".source/compiled/bootloader",
+    ".source/compiled/bootloader/fallback",
+    ".source/uncompiled",
+    ".source/uncompiled/updates",
+    ".source/uncompiled/bootloader",
+    ".source/uncompiled/bootloader/fallback",
+    ".source/data",
+    ".source/data/preferences",
+    ".source/data/secrets",
+    ".source/icons",
+    ".source/themes",
+    ".source/themes/appearance",
+    "data",
+    "data/preferences",
+    "data/secrets",
+)
+
+
 def structure(drive):
-    """Create Clock-owned source/assets plus the root paths the firmware uses."""
-    for d in ("compiled", "compiled/updates", "compiled/bootloader/fallback",
-              "uncompiled", "uncompiled/updates", "uncompiled/bootloader/fallback",
-              "data", "data/preferences", "data/secrets", "icons", "themes", "themes/appearance"):
-        os.makedirs(os.path.join(drive, ".source", d), exist_ok=True)
-    # Firmware preferences and Classroom cache are deliberately root-level,
-    # while installer sources, update files, icons, and themes live in .source.
-    for d in ("data", "data/preferences", "data/secrets"):
-        os.makedirs(os.path.join(drive, d), exist_ok=True)
+    """Create the same non-destructive SD directory tree as ClockOS Prepare."""
+    for relative in CLOCKOS_SD_DIRECTORIES:
+        os.makedirs(os.path.join(drive, *relative.split("/")), exist_ok=True)
     if os.name == "nt":
         try:
             subprocess.run(["attrib", "+h", os.path.join(drive, ".source")], check=False,

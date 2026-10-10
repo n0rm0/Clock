@@ -251,9 +251,12 @@ This checklist reflects the requirements in [`agent.md`](agent.md) and the files
 
 ## Deferred Apple-style UI and behavior fixes
 
+- [x] Make on-device SD preparation and Windows Setup create an identical root and `.source/` directory tree; verify exact parity and preservation of unrelated files in a temporary-directory regression test.
+- [ ] Verify matching folder creation and Ready status on the physical SD card.
+
 - [x] Rework icon layout and alignment: center weather icons consistently, remove awkward-looking variants, and make all status icons share a clean visual scale.
 
-- [ ] Fix SD-card status detection so a correctly inserted/ClockOS-formatted card shows a valid status instead of an X; keep absent, invalid, and ready states distinct.
+- [x] Fix SD-card status detection to verify every required ClockOS folder; a valid/prepared card reports Ready while absent or incomplete cards remain distinct. Automated layout parity test added; physical-card verification still remains open.
 
 - [x] Redesign the status row so the battery matches the Wi-Fi icon size and the SD-card icon sits directly beside the Wi-Fi/battery group.
 
