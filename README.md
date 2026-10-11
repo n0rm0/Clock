@@ -4,11 +4,10 @@ ESP32 clock project for the Hosyond 4-inch ESP32-32E display.
 
 **ClockOSV1** remains the preserved legacy release. The canonical same-name
 `ClockOSV1/` source/binary alias is published alongside the retained `updateV1`
-compatibility slot, so older SD-card and OTA paths keep working. **ClockOSv3.8**
-is the current compiled application release: it has a same-name Arduino sketch
-folder, matching raw-source tree, verified application binary, and release
-manifest. See [the release policy](.source/releases/README.md) before changing a
-version.
+compatibility slot, so older SD-card and OTA paths keep working. **ClockOSv3.9**
+is the current correction release: it has a same-name Arduino sketch folder,
+matching raw-source tree, verified application binary, and release manifest.
+See [the release policy](.source/releases/README.md) before changing a version.
 
 ## Repository layout
 
@@ -25,7 +24,9 @@ Raw source and compiled firmware use matching versioned paths. Each Arduino sket
 │       ├── ClockOSv2.6/ClockOSv2.6.bin
 │       ├── ClockOSv2.7/ClockOSv2.7.bin
 │       ├── ClockOSv2.8/ClockOSv2.8.bin
-│       └── ClockOSv3.8/ClockOSv3.8.bin
+│       ├── ClockOSv3.8/ClockOSv3.8.bin
+│       └── ClockOSv3.9/ClockOSv3.9.bin
+├── icons/                     # transparent Meteocons PNGs and license
 ├── install/                  # GitHub-downloaded launcher and installer
 ├── touch_test/               # standalone raw-touch coordinate sketch
 │   └── touch_test.ino
@@ -39,7 +40,8 @@ Raw source and compiled firmware use matching versioned paths. Each Arduino sket
         ├── ClockOSv2.6/ClockOSv2.6.ino
         ├── ClockOSv2.7/ClockOSv2.7.ino
         ├── ClockOSv2.8/ClockOSv2.8.ino
-        └── ClockOSv3.8/ClockOSv3.8.ino
+        ├── ClockOSv3.8/ClockOSv3.8.ino
+        └── ClockOSv3.9/ClockOSv3.9.ino
 ```
 
 The clock fetches the highest-version update from `.source/compiled/updates/`. Wi-Fi onboarding completes and saves settings before any automatic OTA check, so an update reboot cannot interrupt the first-run wizard. If an earlier firmware interrupted setup after Wi-Fi was saved, V2.6 resumes using those credentials. ClockOS
@@ -48,8 +50,8 @@ rounded progress bar, release identity, status text, and safe failure fallback.
 The `.bat` launcher downloads `.source/install/install.py` from GitHub and
 installs user-scoped Python with `winget` when Python is missing. The Python
 installer scans the repository and selects the highest-version same-name raw clock
-source (`ClockOSv*` or legacy `updateV*`), then downloads/converts Meteocons
-weather icons.
+source (`ClockOSv*` or legacy `updateV*`), then installs the release-matched,
+transparent Meteocons PNG set into `/.source/icons/` on the SD card.
 
 The installer has three modes. **Auto (recommended)** downloads and flashes only the newest compiled clock application `.bin` from `.source/compiled/updates/`; it never downloads the fallback bootloader. **Beta (unstable)** downloads the newest raw update sketch and compiles only that clock application, rather than stale `clock` or bootloader folders left on the computer. **Manual** lets you select a folder containing the `.ino` and `.h` files to compile, including a bootloader sketch only when explicitly selected. Successful compile-only clock binaries are saved as `Downloads/ClockBuilds/<sketch>.bin`.
 
@@ -57,33 +59,36 @@ When flashing a compiled sketch, the installer shows a visible **Flash device** 
 
 Raw sketches installed to an SD card are placed under `.source/uncompiled/updates/<version>/` or `.source/uncompiled/bootloader/fallback/<version>/`; no root-level `updateV1` folder or `extras` folder is created.
 
-The compiled tree contains only real `.bin` files. `ClockOSv3.8.bin` was built
+The compiled tree contains only real `.bin` files. `ClockOSv3.9.bin` is built
 with Arduino CLI 1.5.2-rc.1, ESP32 core 2.0.17, TFT_eSPI 2.5.43, PNGdec 1.1.6,
 and ArduinoJson 7.4.3; its matching raw source is published under the same-name
-`ClockOSv3.8/` folder. The installer and OTA updater choose the highest
+`ClockOSv3.9/` folder. The installer and OTA updater choose the highest
 semantic-version valid application source or binary (so v2.10 outranks v2.9);
 neither automatically selects a bootloader or pins to an older manifest. See
-[`.source/releases/ClockOSv3.8.md`](.source/releases/ClockOSv3.8.md) and
+[`.source/releases/ClockOSv3.9.md`](.source/releases/ClockOSv3.9.md) and
 [`.agent/todo.md`](.agent/todo.md) for the validation record and remaining
 physical-device checks.
 
-ClockOSv3.8 uses display rotation `3` (180°) with the supplied TFT_eSPI touch
+ClockOSv3.9 uses display rotation `3` (180°) with the supplied TFT_eSPI touch
 calibration `{343, 3436, 266, 3381, 1}`. It does not overwrite that mapping from
 the SD card. Physical corner/center calibration and final orientation checks
 remain open; the standalone touch test is available at
 [`.source/touch_test/touch_test.ino`](.source/touch_test/touch_test.ino).
 
-After Wi-Fi connects, the clock requests current conditions from Open-Meteo using Philadelphia by default; manual city selection remains available. It does not use ISP IP geolocation, which can incorrectly place a clock in a distant city. Weather is laid out as icon, temperature, and city, without a long condition label. Meteocons PNGs are loaded from `/.source/icons/`; bounded decoding failures fall back to a built-in vector weather symbol.
+After Wi-Fi connects, the clock requests current conditions from Open-Meteo using Philadelphia by default; manual city selection remains available. It does not use ISP IP geolocation, which can incorrectly place a clock in a distant city. Weather is laid out as icon, temperature, and city, without a long condition label. The installer copies the exact 96×96 Meteocons PNGs tracked at `.source/icons/` into `/.source/icons/` on the card; the Weather screen tells you which PNG loaded or why firmware used its built-in fallback.
 
-The home screen is an original dark bedside display with large segmented time,
+The home screen is an original dark StandBy-style bedside display with large segmented time,
 next-alarm, date/time-format, weather, calendar, connectivity, and battery
-cards. Tap the weather panel for location settings and city entry, the Wi-Fi icon
+cards. Wi-Fi, SD, battery, and Settings indicators use aligned, labeled glyphs;
+the SD card shows distinct absent, needs-setup, and ready states. Tap the weather panel for location settings and city entry, the Wi-Fi icon
 for network management, the calendar panel for the extended calendar, and the
-settings control for preferences. Settings use an iPadOS-inspired full-width
-grouped category list with category icons, hierarchical detail rows, consistent
-touch targets, selected-theme states, and larger switches. The display sleep
-routine explicitly drives the active-high GPIO27 backlight low and redraws Home
-before re-enabling the backlight. A newly computer-formatted SD card is accepted
+settings control for preferences. Settings use an iPadOS-style grouped
+hierarchy: labeled categories, live values, inset dividers, detail screens with
+plain-language control explanations, consistent switches and chevrons, and
+matching back navigation. General includes time, battery, themes, a display-
+sleep switch, and Weather/location. The one-minute idle timeout works on normal
+Settings/detail pages as well as Home, drives the documented active-high GPIO27
+backlight low, and redraws the previous page before waking. A newly formatted SD card is accepted
 and ClockOS creates its own required folders automatically without erasing
 unrelated files; the status indicator distinguishes card presence from readiness.
 The date is shown as `DD/MM/YYYY`; tapping it toggles 12/24-hour time. Offline
@@ -95,8 +100,8 @@ Preferences are stored as JSON only when an SD card is detected, under
 `touch.json`). If no SD card is inserted, ClockOS does not save preferences;
 the current session continues with in-memory defaults. Classroom secrets and
 the read-only cache remain under the protected `/data/secrets/` area.
-The SD-card icon is filled for a valid ClockOS card, outline-only when no card
-is present, and marked with an X when a card is inserted but not prepared.
+The SD-card icon is green when ready, amber when inserted but not prepared, and
+neutral when absent.
 Settings > Storage and Windows Setup create the exact same root and `.source/`
 folder layout. Normal on-device and Windows preparation preserve unrelated files.
 Windows Setup has a separate **Erase all existing files** option, selected when SD installation is enabled (it can be unchecked); after
@@ -149,4 +154,4 @@ by ClockOS.
 
 Enable **Google Classroom notifications** in the installer and choose the Desktop OAuth JSON from Google Cloud. The installer also checks common user folders (`Downloads`, `Documents`, `Desktop`, and the installer folder) for OAuth-shaped `.json` files and asks **“Is this the Google OAuth secrets file for Clock?”** before selecting one. It opens Google sign-in **before erasing or installing the SD card**; choose the school account, approve read-only Classroom/Calendar access, and the installer saves the private client/token plus `classroom_cache.json` under `/data/secrets/`. Do not commit those files to GitHub. The cache contains active courses, published assignments/projects, announcements, submission status data, and upcoming Google Calendar events. The firmware reads the cache at startup and refreshes the displayed assignment summary every second; run the installer again to perform a new Google sync.
 
-The home screen shows the nearest cached assignment or project and due date. The extended calendar lists the next cached items. The display sleeps after one minute without a touch and wakes on touch. Settings includes a two-tap **Factory reset** button that removes saved settings, Wi-Fi credentials, Classroom tokens, and the cached Classroom data before restarting.
+The home screen shows the nearest cached assignment or project and due date. The extended calendar lists the next cached items. The display sleeps after one minute without a touch on normal interactive pages when **General → Turn display off** is enabled, then wakes on touch. Settings includes a two-tap **Factory reset** button that removes saved settings, Wi-Fi credentials, Classroom tokens, and the cached Classroom data before restarting.
