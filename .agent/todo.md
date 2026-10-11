@@ -318,4 +318,30 @@ This checklist reflects the requirements in [`agent.md`](agent.md) and the files
 - [ ] Validate v3.8 Home, Settings, touch targets, weather PNGs, SD status, sleep/wake, and OTA behavior on the physical Hosyond display.
 - [ ] Validate Windows 10/11 installer DPI scaling, launch behavior, and recovery/retry flow with the v3.8 release.
 
-> **Current status:** ClockOSv3.8 is the current compiled application artifact. It is build-validated, image-validated, and covered by the host-side regression checks. Physical-device and native Windows UI validation remain intentionally open.
+> **Historical status for this v3.8 entry:** ClockOSv3.8 was the current application at the time; it was build-validated, image-validated, and covered by the host-side regression checks. Hardware checks remained open and carry forward to the latest release.
+
+
+
+
+## User-requested iPadOS / StandBy correction — 2026-10-11
+
+**User feedback to address:** the prior release did not look recognizably like iPadOS Settings or Apple StandBy; the SD-card, person/profile, battery and Settings icons looked poor or disappeared; weather PNG assets appeared not to be used; inserting the SD card did not produce a visible, reliable status; and the display backlight did not turn off. The user explicitly requested a more faithful iPadOS Settings experience, with detailed descriptions of each control, and asked that this feedback be recorded here before implementation.
+
+### Acceptance checks
+- [x] Rebuilt Settings as an iPadOS-style grouped hierarchy with clear navigation, category summaries, inset dividers, live values, explanatory detail text, and consistent switch/chevron rows sized to the 480×320 panel. Physical appearance still needs the on-device check below.
+- [x] Added General controls for time format, battery percentage, appearance, and saved display sleep; Weather/location is reachable from General and returns to the same Settings context.
+- [x] Replaced the Home Wi-Fi, SD, battery, Settings, and profile/person artwork/status treatment with aligned, high-contrast labeled controls; firmware distinguishes absent, inserted-needs-setup, and ready SD states.
+- [x] SD state is refreshed every 1.5 seconds; only the ClockOS folder layout is created, without formatting or erasing unrelated files. Installer and source-level regression tests pass. Physical insert/remove behavior is not yet confirmed.
+- [x] Windows Setup copies and validates all eight checked-in Meteocons PNGs; firmware reads them from SD and reports the PNG loaded or the fallback reason. Visual validation caught and fixed black-filled initial SVG renders; tests now reject dark/black-filled image outputs. An empty card alone is not claimed to contain those image files.
+- [x] Implemented a persistent one-minute idle timeout on normal Home/Settings/detail pages; wake redraws the prior page before the active-high GPIO27 backlight is enabled. Actual backlight response is not yet confirmed on the user's device.
+- [x] Built and image-validated ClockOSv3.9; all 12 host tests pass; current/versioned manifests, README files, and a detailed build record are updated. Physical validation remains open.
+
+### Remaining physical-device checks
+- [ ] Inspect the 480×320 Home and Settings layout, readability, and touch targets on the Hosyond display.
+- [ ] Insert/remove a prepared SD card and verify the status refresh, asset paths, and each rendered weather PNG; also check an unprepared/unsupported card.
+- [ ] Confirm the backlight actually turns fully off after one idle minute on Home and Settings, then wakes only after its prior screen is redrawn.
+- [ ] Run Windows Setup on Windows 10/11 with a removable SD card; confirm all eight PNGs install, progress/retry works, and non-erase setup preserves unrelated files.
+
+**Evidence boundary:** GPIO27 is documented as active-high on the [LCDWiki 4.0-inch ESP32-32E board](https://www.lcdwiki.com/4.0inch_ESP32-32E_Display). That confirms the configured LOW output is the correct off level, but does not prove the user's particular unit's backlight actually responds; physical validation is still required. Weather artwork is the [Bas Milius Meteocons project](https://github.com/basmilius/weather-icons) under the included MIT license. The first Arduino compile exposed the new sleep predicate's enum declaration-order issue; the helper signature was corrected and the final compilation then passed.
+
+> **Current status:** ClockOSv3.9 is built and image-validated; all 12 host tests pass. Hardware and Windows-device checks are explicitly open above.

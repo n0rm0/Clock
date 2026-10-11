@@ -91,6 +91,8 @@ class InstallerEraseAndReleaseTests(unittest.TestCase):
 
     def test_current_release_manifest_matches_firmware_image_and_ui(self):
         manifest = json.loads((ROOT / ".source/releases/current.json").read_text(encoding="utf-8"))
+        versioned_manifest = ROOT / ".source/releases" / f"{manifest['firmwareIdentity']}.json"
+        self.assertEqual(json.loads(versioned_manifest.read_text(encoding="utf-8")), manifest)
         binary_path = ROOT / manifest["binaryPath"]
         image = binary_path.read_bytes()
         sketch = manifest["sketch"]
@@ -105,7 +107,9 @@ class InstallerEraseAndReleaseTests(unittest.TestCase):
         firmware = (raw_source / f"{sketch}.ino").read_text(encoding="utf-8")
         self.assertIn(f'"{manifest["displayVersion"]}"', firmware)
         self.assertIn(f'"{firmware_identity}"', firmware)
-        for marker in (b"Settings", b"General", b"Appearance", b"Storage", b"Factory Reset", b"Choose network", b"No alarms set"):
+        for marker in (b"Settings", b"General", b"Appearance", b"Storage", b"Factory Reset",
+                       b"Choose network", b"No alarms set", b"Turn display off",
+                       b"Weather & location", b"Weather PNG", b"Battery percentage"):
             self.assertIn(marker, image)
         self.assertEqual(binary_path.name, f"{sketch}.bin")
 

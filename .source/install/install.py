@@ -25,11 +25,11 @@ SOURCE_ROOT = ".source/uncompiled/updates"
 # setup useful and predictable if GitHub is unavailable or the manifest is bad.
 DEFAULT_RELEASE = {
     "productName": "ClockOS",
-    "displayVersion": "v2.8",
-    "firmwareIdentity": "ClockOSv2.8",
-    "sketch": "ClockOSv2.8",
-    "rawSourcePath": ".source/uncompiled/updates/ClockOSv2.8",
-    "binaryPath": ".source/compiled/updates/ClockOSv2.8/ClockOSv2.8.bin",
+    "displayVersion": "v3.9",
+    "firmwareIdentity": "ClockOSv3.9",
+    "sketch": "ClockOSv3.9",
+    "rawSourcePath": ".source/uncompiled/updates/ClockOSv3.9",
+    "binaryPath": ".source/compiled/updates/ClockOSv3.9/ClockOSv3.9.bin",
 }
 RELEASE = dict(DEFAULT_RELEASE)
 PRODUCT_NAME = DEFAULT_RELEASE["productName"]
@@ -39,12 +39,8 @@ FLASH_SKETCH = DEFAULT_RELEASE["sketch"]
 _RELEASE_LOADED = False
 INSTALLER_ICON_NAME = "clockos.ico"
 UA = {"User-Agent": "clock-installer"}
-ICON_BASE = "https://raw.githubusercontent.com/basmilius/weather-icons/dev/production/fill"
-ICONS = ["clear-day", "clear-night", "partly-cloudy-day", "partly-cloudy-night", "cloudy",
-         "overcast", "overcast-day", "overcast-night", "rain", "drizzle", "partly-cloudy-day-rain",
-         "thunderstorms", "thunderstorms-rain", "thunderstorms-day", "snow", "sleet", "hail",
-         "fog", "mist", "haze", "wind", "not-available"]
-ICON_SIZE = 96
+WEATHER_ICONS = ("clear-day", "partly-cloudy-day", "fog", "drizzle", "rain", "snow", "thunderstorms", "cloudy")
+WEATHER_ASSET_BASE = "https://raw.githubusercontent.com/%s/%s/%s/.source/icons" % (OWNER, REPO, BRANCH)
 THEME_IDS = ["crystal", "midnight", "ocean", "sunrise", "graphite"]
 THEME_BASE = "https://raw.githubusercontent.com/%s/%s/%s/.source/themes/appearance" % (OWNER, REPO, BRANCH)
 
@@ -565,32 +561,24 @@ def structure(drive):
 
 
 def icons(drive, lo, hi):
-    try:
-        import fitz
-    except ImportError:
-        install_python_packages(["pymupdf"], lo, min(hi, lo + 3), "Installing weather-icon support")
-        try:
-            import fitz
-        except ImportError as exc:
-            raise RuntimeError("Weather icons need PyMuPDF, but it could not be imported after installation: %s" % exc)
     ok, bad = 0, []
-    for i, name in enumerate(ICONS):
-        prog(lo + int((hi - lo) * i / len(ICONS)), "Downloading icons... %d/%d" % (i + 1, len(ICONS)))
-        data = None
-        for folder in ("svg-static", "svg"):
-            try:
-                data = http_get("%s/%s/%s.svg" % (ICON_BASE, folder, name), 20)
-                break
-            except Exception:
-                continue
-        if data is None:
-            bad.append(name)
-            continue
+    target = os.path.join(drive, ".source", "icons")
+    os.makedirs(target, exist_ok=True)
+    for i, name in enumerate(WEATHER_ICONS):
+        prog(lo + int((hi - lo) * i / len(WEATHER_ICONS)), "Installing weather PNGs... %d/%d" % (i + 1, len(WEATHER_ICONS)))
         try:
-            page = fitz.open(stream=data, filetype="svg")[0]
-            z = ICON_SIZE / max(page.rect.width, page.rect.height)
-            page.get_pixmap(matrix=fitz.Matrix(z, z), alpha=True).save(
-                os.path.join(drive, ".source", "icons", name + ".png"))
+            data = http_get("%s/%s.png" % (WEATHER_ASSET_BASE, name), 20)
+            if len(data) < 32 or data[:8] != b"\x89PNG\r\n\x1a\n":
+                raise ValueError("download is not a PNG image")
+            width = int.from_bytes(data[16:20], "big")
+            height = int.from_bytes(data[20:24], "big")
+            if width != 96 or height != 96:
+                raise ValueError("expected a 96 x 96 icon, got %d x %d" % (width, height))
+            path = os.path.join(target, name + ".png")
+            temporary = path + ".tmp"
+            with open(temporary, "wb") as icon_file:
+                icon_file.write(data)
+            os.replace(temporary, path)
             ok += 1
         except Exception:
             bad.append(name)
@@ -997,7 +985,7 @@ def work(opts, ask_port, ask_target):
             S.summary.append("SD card: %s  (sketches: %s)" % (drive, ", ".join(inos) or "none"))
             if not update_only:
                 ok, bad = icons(drive, 20, 52)
-                S.summary.append("Icons: %d/%d%s" % (ok, len(ICONS), "  (failed: " + ", ".join(bad) + ")" if bad else ""))
+                S.summary.append("Weather PNGs: %d/%d%s" % (ok, len(WEATHER_ICONS), "  (failed: " + ", ".join(bad) + ")" if bad else ""))
                 tok, tbad = themes(drive, 52, 58)
                 S.summary.append("Themes: %d/%d%s" % (tok, len(THEME_IDS), "  (failed: " + ", ".join(tbad) + ")" if tbad else ""))
         if mode == "auto" and not do_dl:
